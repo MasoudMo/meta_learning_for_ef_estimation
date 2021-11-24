@@ -1,11 +1,34 @@
 import re
 import os
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from torchvision.transforms import Compose, ToTensor, Normalize
 import SimpleITK as sitk
-import torch
 import cv2
+import torch
+from torch.nn.utils.rnn import pad_sequence
+
+
+def custom_collate_fn(batch):
+    """
+    Custom collate function to handle variable size videos
+
+    Parameters
+    ----------
+    batch (tuple): Contains video and label pairs
+
+    Returns
+    -------
+    Collated batch with padded videos
+    """
+
+    videos = [item[0] for item in batch]
+    labels = [item[1] for item in batch]
+
+    videos = pad_sequence(videos, padding_value=0, batch_first=True)
+    labels = torch.stack(labels)
+
+    return [videos, labels]
 
 
 def add_sample_to_dataset(patient_dirs,
@@ -98,7 +121,7 @@ def add_sample_to_dataset_for_task(patient_dirs,
                               path_to_add=path_to_add,
                               view=view)
 
-    #TODO: Add image quality (if separate task for each image quality)
+    # TODO: Add image quality (if separate task for each image quality)
 
 
 class CamusEfDataset(Dataset):
@@ -110,6 +133,7 @@ class CamusEfDataset(Dataset):
                  dataset_path,
                  image_shape,
                  device=None,
+                 num_frames=None,
                  task='all_ef',
                  view='all_views'):
         """
@@ -120,6 +144,7 @@ class CamusEfDataset(Dataset):
         dataset_path (str): Path to directory containing data
         image_shape (int): Shape to resize images to
         device (torch device): device to move data to
+        num_frames (int): Number of frames to use for each video (If video is shorter than this replica
         task (str): task to create the dataset for (must be one of
                     [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, lvesv, lvedv, quality])
         view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
@@ -153,7 +178,7 @@ class CamusEfDataset(Dataset):
                 label_pattern = re.compile('(?<=(LVesv: ))(.*)')
             elif task == 'lvedv':
                 label_pattern = re.compile('(?<=(LVedv: ))(.*)')
-            elif task == 'quality':
+            else:
                 label_pattern = re.compile('(?<=(ImageQuality: ))(.*)')
 
             # Text file path to extract the label from
@@ -163,7 +188,7 @@ class CamusEfDataset(Dataset):
             label_file.close()
 
             # Find the label
-            match = float(label_pattern.findall(label_str)[0])/100
+            match = float(label_pattern.findall(label_str)[0][1])/100
 
             # Add sample for task
             add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
@@ -185,7 +210,7 @@ class CamusEfDataset(Dataset):
         # Other attributes
         self.device = device
 
-    def get(self, idx):
+    def __getitem__(self, idx):
         """
         Get the sample video and label at idx
 
@@ -199,7 +224,7 @@ class CamusEfDataset(Dataset):
         """
 
         # Get the label
-        label = self.labels[idx]
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
 
         # extract video
         cine_vid = self.process_cine(sitk.ReadImage(self.patient_data_dirs[idx]), size=self.image_shape)
@@ -211,7 +236,7 @@ class CamusEfDataset(Dataset):
 
         return cine_vid, label
 
-    def len(self):
+    def __len__(self):
         """
         Provides length of the dataset
 
@@ -242,3 +267,21 @@ class CamusEfDataset(Dataset):
         processed_vid = cv2.resize(processed_vid, (size, size))
 
         return processed_vid
+
+
+if __name__ == '__main__':
+
+    # Example code on usage of datasets
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    dataset = CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
+                             image_shape=128,
+                             device=device,
+                             task='all_ef',
+                             view='all_views')
+
+    dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
+
+    for data, label in dataloader:
+        print(label)
