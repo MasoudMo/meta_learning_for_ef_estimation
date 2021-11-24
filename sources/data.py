@@ -100,7 +100,7 @@ def add_sample_to_dataset_for_task(patient_dirs,
                                   view=view)
 
     elif task == 'medium_ef_risk':
-        if label_to_add <= 0.39:
+        if 0.35 < label_to_add <= 0.39:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
@@ -108,18 +108,19 @@ def add_sample_to_dataset_for_task(patient_dirs,
                                   view=view)
 
     elif task == 'slight_ef_risk':
-        if label_to_add <= 0.54:
+        if 0.39 < label_to_add <= 0.54:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
                                   path_to_add=path_to_add,
                                   view=view)
     elif task == 'normal_ef':
-        add_sample_to_dataset(patient_dirs=patient_dirs,
-                              labels=labels,
-                              label_to_add=label_to_add,
-                              path_to_add=path_to_add,
-                              view=view)
+        if label_to_add >= 0.55:
+            add_sample_to_dataset(patient_dirs=patient_dirs,
+                                  labels=labels,
+                                  label_to_add=label_to_add,
+                                  path_to_add=path_to_add,
+                                  view=view)
 
     # TODO: Add image quality (if separate task for each image quality)
 
@@ -133,7 +134,6 @@ class CamusEfDataset(Dataset):
                  dataset_path,
                  image_shape,
                  device=None,
-                 num_frames=None,
                  task='all_ef',
                  view='all_views'):
         """
@@ -161,7 +161,9 @@ class CamusEfDataset(Dataset):
                         'lvesv',
                         'lvedv',
                         'quality'], 'Specified task is not supported'
-        assert view in ['all_views'], 'Specified view is not supported'
+        assert view in ['all_views',
+                        'ap2',
+                        'ap4'], 'Specified view is not supported'
 
         # Obtain file dirs
         data_dirs = os.listdir(dataset_path)
@@ -278,8 +280,8 @@ if __name__ == '__main__':
     dataset = CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
                              image_shape=128,
                              device=device,
-                             task='all_ef',
-                             view='all_views')
+                             task='normal_ef',
+                             view='ap2')
 
     dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
 
