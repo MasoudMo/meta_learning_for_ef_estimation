@@ -209,7 +209,7 @@ class CamusEfDataset(Dataset):
                                                    path_to_add=data_path,
                                                    task=task)
 
-        # Extract the number of available studies/graphs
+        # Extract the number of available data
         self.num_samples = len(self.patient_data_dirs)
 
         # Normalization operation
@@ -220,6 +220,7 @@ class CamusEfDataset(Dataset):
 
         # Other attributes
         self.device = device
+        self.task = task
 
     def __getitem__(self, idx):
         """
@@ -235,7 +236,10 @@ class CamusEfDataset(Dataset):
         """
 
         # Get the label
-        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+        if self.task == 'quality':
+            label = torch.tensor(self.labels[idx], dtype=torch.long)
+        else:
+            label = torch.tensor(self.labels[idx], dtype=torch.float32)
 
         # extract video
         cine_vid = self.process_cine(sitk.ReadImage(self.patient_data_dirs[idx]), size=self.image_shape)
