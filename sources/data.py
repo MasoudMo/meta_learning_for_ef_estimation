@@ -87,7 +87,7 @@ def add_sample_to_dataset_for_task(patient_dirs,
                               view=view)
 
     elif task == 'high_risk_ef':
-        if label_to_add <= 0.35:
+        if label_to_add <= 35:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
@@ -95,7 +95,7 @@ def add_sample_to_dataset_for_task(patient_dirs,
                                   view=view)
 
     elif task == 'medium_ef_risk':
-        if 0.35 < label_to_add <= 0.39:
+        if 35 < label_to_add <= 39:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
@@ -103,14 +103,14 @@ def add_sample_to_dataset_for_task(patient_dirs,
                                   view=view)
 
     elif task == 'slight_ef_risk':
-        if 0.39 < label_to_add <= 0.54:
+        if 39 < label_to_add <= 54:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
                                   path_to_add=path_to_add,
                                   view=view)
     elif task == 'normal_ef':
-        if label_to_add >= 0.55:
+        if label_to_add >= 55:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
