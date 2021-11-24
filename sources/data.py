@@ -35,8 +35,7 @@ def custom_collate_fn(batch):
 def add_sample_to_dataset(patient_dirs,
                           labels,
                           label_to_add,
-                          path_to_add,
-                          view):
+                          path_to_add):
     """
     Add sample to dataset based on what view is required
 
@@ -45,26 +44,18 @@ def add_sample_to_dataset(patient_dirs,
     patient_dirs (list): List containing directory path for echo videos
     labels (list): List containing labels
     label_to_add (float or int): Label to add to the labels list
-    path_to_add (str): Path to patient directory
-    view (str): View to add
+    path_to_add (str): Path to patient data
 
     """
 
     labels.append(label_to_add)
-
-
-    # Add the patient video directory
-    if view == 'ap2':
-        patient_dirs.append(os.path.join(path_to_add + '_2CH_sequence.mhd'))
-    elif view == 'ap4':
-        patient_dirs.append(os.path.join(path_to_add + '_4CH_sequence.mhd'))
+    patient_dirs.append(path_to_add)
 
 
 def add_sample_to_dataset_for_task(patient_dirs,
                                    labels,
                                    label_to_add,
                                    path_to_add,
-                                   view,
                                    task):
     """
     Adds sample to dataset based on required task
@@ -74,8 +65,7 @@ def add_sample_to_dataset_for_task(patient_dirs,
     patient_dirs (list): List containing directory path for echo videos
     labels (list): List containing labels
     label_to_add (float or int): Label to add to the labels list
-    path_to_add (str): Path to patient directory
-    view (str): View to add
+    path_to_add (str): Path to patient data
     task (str): Task to add data samples for
     """
 
@@ -83,46 +73,40 @@ def add_sample_to_dataset_for_task(patient_dirs,
         add_sample_to_dataset(patient_dirs=patient_dirs,
                               labels=labels,
                               label_to_add=label_to_add,
-                              path_to_add=path_to_add,
-                              view=view)
+                              path_to_add=path_to_add)
 
     elif task == 'high_risk_ef':
         if label_to_add <= 35:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
-                                  path_to_add=path_to_add,
-                                  view=view)
+                                  path_to_add=path_to_add)
 
     elif task == 'medium_ef_risk':
         if 35 < label_to_add <= 39:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
-                                  path_to_add=path_to_add,
-                                  view=view)
+                                  path_to_add=path_to_add)
 
     elif task == 'slight_ef_risk':
         if 39 < label_to_add <= 54:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
-                                  path_to_add=path_to_add,
-                                  view=view)
+                                  path_to_add=path_to_add)
     elif task == 'normal_ef':
         if label_to_add >= 55:
             add_sample_to_dataset(patient_dirs=patient_dirs,
                                   labels=labels,
                                   label_to_add=label_to_add,
-                                  path_to_add=path_to_add,
-                                  view=view)
+                                  path_to_add=path_to_add)
 
     else:
         add_sample_to_dataset(patient_dirs=patient_dirs,
                               labels=labels,
                               label_to_add=label_to_add,
-                              path_to_add=path_to_add,
-                              view=view)
+                              path_to_add=path_to_add)
 
     # TODO: Add image quality (if separate task for each image quality)
 
@@ -189,8 +173,10 @@ class CamusEfDataset(Dataset):
             for label_view in ['ap2', 'ap4']:
                 if label_view == 'ap2':
                     label_path = os.path.join(dataset_path, patient, 'Info_2CH.cfg')
+                    data_path = os.path.join(dataset_path, patient, patient + '_2CH_sequence.mhd')
                 else:
                     label_path = os.path.join(dataset_path, patient, 'Info_4CH.cfg')
+                    data_path = os.path.join(dataset_path, patient, patient + '_4CH_sequence.mhd')
 
                 label_file = open(label_path)
                 label_str = label_file.read()
@@ -214,15 +200,13 @@ class CamusEfDataset(Dataset):
                     add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
                                                    labels=self.labels,
                                                    label_to_add=match,
-                                                   path_to_add=os.path.join(dataset_path, patient, patient),
-                                                   view=label_view,
+                                                   path_to_add=data_path,
                                                    task=task)
                 elif view == label_view:
                     add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
                                                    labels=self.labels,
                                                    label_to_add=match,
-                                                   path_to_add=os.path.join(dataset_path, patient, patient),
-                                                   view=label_view,
+                                                   path_to_add=data_path,
                                                    task=task)
 
         # Extract the number of available studies/graphs
@@ -305,8 +289,8 @@ if __name__ == '__main__':
     dataset = CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
                              image_shape=128,
                              device=device,
-                             task='esv',
-                             view='all_views')
+                             task='edv',
+                             view='ap2')
 
     dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
 
