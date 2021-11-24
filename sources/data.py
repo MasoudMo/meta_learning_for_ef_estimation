@@ -7,6 +7,7 @@ import SimpleITK as sitk
 import cv2
 import torch
 from torch.nn.utils.rnn import pad_sequence
+import pandas as pd
 
 
 def custom_collate_fn(batch):
@@ -51,15 +52,9 @@ def add_sample_to_dataset(patient_dirs,
 
     labels.append(label_to_add)
 
-    # Need to replicate the label if both video views are needed
-    if view == 'all_views':
-        labels.append(label_to_add)
 
     # Add the patient video directory
-    if view == 'all_views':
-        patient_dirs.append(os.path.join(path_to_add + '_2CH_sequence.mhd'))
-        patient_dirs.append(os.path.join(path_to_add + '_4CH_sequence.mhd'))
-    elif view == 'ap2':
+    if view == 'ap2':
         patient_dirs.append(os.path.join(path_to_add + '_2CH_sequence.mhd'))
     elif view == 'ap4':
         patient_dirs.append(os.path.join(path_to_add + '_4CH_sequence.mhd'))
@@ -122,6 +117,13 @@ def add_sample_to_dataset_for_task(patient_dirs,
                                   path_to_add=path_to_add,
                                   view=view)
 
+    else:
+        add_sample_to_dataset(patient_dirs=patient_dirs,
+                              labels=labels,
+                              label_to_add=label_to_add,
+                              path_to_add=path_to_add,
+                              view=view)
+
     # TODO: Add image quality (if separate task for each image quality)
 
 
@@ -146,7 +148,7 @@ class CamusEfDataset(Dataset):
         device (torch device): device to move data to
         num_frames (int): Number of frames to use for each video (If video is shorter than this replica
         task (str): task to create the dataset for (must be one of
-                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, lvesv, lvedv, quality])
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv, quality])
         view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
         """
 
@@ -158,8 +160,8 @@ class CamusEfDataset(Dataset):
                         'medium_ef_risk',
                         'slight_ef_risk',
                         'normal_ef',
-                        'lvesv',
-                        'lvedv',
+                        'esv',
+                        'edv',
                         'quality'], 'Specified task is not supported'
         assert view in ['all_views',
                         'ap2',
@@ -176,29 +178,52 @@ class CamusEfDataset(Dataset):
             # Get the correct pattern to search for based on task
             if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
                 label_pattern = re.compile('(?<=(LVef: ))(.*)')
-            elif task == 'lvesv':
+            elif task == 'esv':
                 label_pattern = re.compile('(?<=(LVesv: ))(.*)')
-            elif task == 'lvedv':
+            elif task == 'edv':
                 label_pattern = re.compile('(?<=(LVedv: ))(.*)')
             else:
                 label_pattern = re.compile('(?<=(ImageQuality: ))(.*)')
 
-            # Text file path to extract the label from
-            label_path = os.path.join(dataset_path, patient, 'Info_2CH.cfg')
-            label_file = open(label_path)
-            label_str = label_file.read()
-            label_file.close()
+            # Text files path to extract the label from
+            for label_view in ['ap2', 'ap4']:
+                if label_view == 'ap2':
+                    label_path = os.path.join(dataset_path, patient, 'Info_2CH.cfg')
+                else:
+                    label_path = os.path.join(dataset_path, patient, 'Info_4CH.cfg')
 
-            # Find the label
-            match = float(label_pattern.findall(label_str)[0][1])/100
+                label_file = open(label_path)
+                label_str = label_file.read()
+                label_file.close()
 
-            # Add sample for task
-            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
-                                           labels=self.labels,
-                                           label_to_add=match,
-                                           path_to_add=os.path.join(dataset_path, patient, patient),
-                                           view=view,
-                                           task=task)
+                # Find the label
+                match = label_pattern.findall(label_str)[0][1]
+
+                if task == 'quality':
+                    if match == 'Good':
+                        match = 0
+                    if match == 'Medium':
+                        match = 1
+                    elif match == 'Poor':
+                        match = 2
+                else:
+                    match = float(label_pattern.findall(label_str)[0][1])
+
+                # Add sample for task
+                if view == 'all_views':
+                    add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                                   labels=self.labels,
+                                                   label_to_add=match,
+                                                   path_to_add=os.path.join(dataset_path, patient, patient),
+                                                   view=label_view,
+                                                   task=task)
+                elif view == label_view:
+                    add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                                   labels=self.labels,
+                                                   label_to_add=match,
+                                                   path_to_add=os.path.join(dataset_path, patient, patient),
+                                                   view=label_view,
+                                                   task=task)
 
         # Extract the number of available studies/graphs
         self.num_samples = len(self.patient_data_dirs)
@@ -280,8 +305,8 @@ if __name__ == '__main__':
     dataset = CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
                              image_shape=128,
                              device=device,
-                             task='normal_ef',
-                             view='ap2')
+                             task='esv',
+                             view='all_views')
 
     dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
 
