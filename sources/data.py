@@ -243,7 +243,7 @@ class CamusEfDataset(Dataset):
 
         # extract video
         cine_vid = self.process_cine(sitk.ReadImage(self.patient_data_dirs[idx]), size=self.image_shape)
-        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8))
+        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
 
         # Move to correct device
         cine_vid.to(self.device)
@@ -284,17 +284,147 @@ class CamusEfDataset(Dataset):
         return processed_vid
 
 
+class EchoNetEfDataset(Dataset):
+    """
+    Dataset class for EchoNet EF found at https://echonet.github.io/dynamic/
+    """
+
+    def __init__(self,
+                 dataset_path,
+                 device=None,
+                 max_frames=250,
+                 nth_frame=1,
+                 task='all_ef'):
+        """
+        Constructor for the EchoNet EF dataset dataset class
+
+        Parameters
+        ----------
+        dataset_path (str): Path to directory containing data
+        device (torch device): device to move data to
+        max_frames (int): Max number of frames to use for each video (If video is shorter than this replicate it to fit)
+        nth_frame (int): Only extract every nth frame
+        task (str): task to create the dataset for (must be one of
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
+        """
+
+        # CSV file containing file names and labels
+        filelist_df = pd.read_csv(os.path.join(dataset_path, 'FileList.csv'))
+
+        # All file paths
+        data_dirs = [os.path.join(dataset_path,
+                                  'Videos',
+                                  file_name + '.avi') for file_name in filelist_df['FileName'].tolist()]
+
+        # Get labels based on task
+        if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
+            labels = filelist_df['EF'].tolist()
+        elif task == 'esv':
+            labels = filelist_df['ESV'].tolist()
+        else:
+            labels = filelist_df['EDV'].tolist()
+
+        self.labels = list()
+        self.patient_data_dirs = list()
+        for patient_data_dir, patient_label in zip(data_dirs, labels):
+            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                           labels=self.labels,
+                                           label_to_add=patient_label,
+                                           path_to_add=patient_data_dir,
+                                           task=task)
+
+        # Extract the number of available data
+        self.num_samples = len(self.patient_data_dirs)
+
+        # Normalization operation
+        self.trans = Compose([ToTensor(),
+                              Normalize((0.5), (0.5))])
+
+        # Other attributes
+        self.device = device
+        self.max_frames = max_frames
+        self.nth_frame = nth_frame
+
+    def __getitem__(self, idx):
+
+        # Get the label
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
+        # Get the video
+        cine_vid = self.loadvideo(self.patient_data_dirs[idx])
+
+        # Extract nth frames
+        cine_vid = cine_vid[0::self.nth_frame]
+
+        # clip if longer than max_frames
+        if cine_vid.shape[0] > self.max_frames:
+            cine_vid = cine_vid[:self.max_frames]
+
+        cine_vid = self.trans(cine_vid).unsqueeze(1)
+
+        # Move to correct device
+        cine_vid.to(self.device)
+        label.to(self.device)
+
+        return cine_vid, label
+
+    def __len__(self):
+        """
+        Provides length of the dataset
+
+        Returns
+        -------
+            (int): Indicates the number of available samples for the task
+        """
+
+        return self.num_samples
+
+    @staticmethod
+    def loadvideo(filename):
+        """
+        Video loader code from https://github.com/echonet/dynamic/tree/master/echonet with some modifications
+
+        Parameters
+        ----------
+        filename(str): path to file to extract
+
+        Returns
+        ----------
+        Loaded video as a numpy array with shape (num_frames, channels, height, width)
+        """
+
+        if not os.path.exists(filename):
+            raise FileNotFoundError(filename)
+        capture = cv2.VideoCapture(filename)
+
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        v = np.zeros((frame_height, frame_width, frame_count), np.uint8)
+
+        for count in range(frame_count):
+            ret, frame = capture.read()
+            if not ret:
+                raise ValueError("Failed to load frame #{} of {}.".format(count, filename))
+
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            v[:, :, count] = frame
+
+        return v
+
+
 if __name__ == '__main__':
 
     # Example code on usage of datasets
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    dataset = CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
-                             image_shape=128,
-                             device=device,
-                             task='edv',
-                             view='ap2')
+    dataset = EchoNetEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/EchoNet-Dynamic/EchoNet-Dynamic',
+                               device=None,
+                               max_frames=250,
+                               nth_frame=1,
+                               task='high_risk_ef')
 
     dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
 
