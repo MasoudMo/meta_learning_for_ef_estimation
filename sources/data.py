@@ -246,8 +246,8 @@ class CamusEfDataset(Dataset):
         cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
 
         # Move to correct device
-        cine_vid.to(self.device)
-        label.to(self.device)
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
 
         return cine_vid, label
 
@@ -363,8 +363,8 @@ class EchoNetEfDataset(Dataset):
         cine_vid = self.trans(cine_vid).unsqueeze(1)
 
         # Move to correct device
-        cine_vid.to(self.device)
-        label.to(self.device)
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
 
         return cine_vid, label
 
