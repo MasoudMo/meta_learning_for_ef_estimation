@@ -103,7 +103,7 @@ class CustomCNN3D(nn.Module):
 
         # Output linear layer
         self.output_fc = nn.Sequential(nn.Linear(out_channels[-1], output_dim),
-                                       nn.ReLU(inplace=True),
+                                       nn.Tanh(),
                                        nn.Dropout(p=fc_dropout_p))
 
     def forward(self,
