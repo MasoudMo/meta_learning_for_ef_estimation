@@ -8,6 +8,7 @@ import cv2
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
+from scipy.io import loadmat
 
 
 def custom_collate_fn(batch):
@@ -308,6 +309,15 @@ class EchoNetEfDataset(Dataset):
                     [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
         """
 
+        # Input checks
+        assert task in ['all_ef',
+                        'high_risk_ef',
+                        'medium_ef_risk',
+                        'slight_ef_risk',
+                        'normal_ef',
+                        'esv',
+                        'edv'], 'Specified task is not supported'
+
         # CSV file containing file names and labels
         filelist_df = pd.read_csv(os.path.join(dataset_path, 'FileList.csv'))
 
@@ -346,6 +356,17 @@ class EchoNetEfDataset(Dataset):
         self.nth_frame = nth_frame
 
     def __getitem__(self, idx):
+        """
+        Get the sample video and label at idx
+
+        Parameters
+        ----------
+        idx (int): Index to fetch data for
+
+        Returns
+        -------
+        (Torch tensors) for video and corresponding label
+        """
 
         # Get the label
         label = torch.tensor(self.labels[idx], dtype=torch.float32)
@@ -412,6 +433,161 @@ class EchoNetEfDataset(Dataset):
             v[:, :, count] = frame
 
         return v
+
+
+class LVBiplaneEFDataset(Dataset):
+    """
+    Dataset class for the LV Biplane
+    """
+
+    def __init__(self,
+                 dataset_path,
+                 image_shape,
+                 device=None,
+                 raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
+                 task='all_ef',
+                 view='all_views'):
+        """
+        Constructor for the LV Biplane EF dataset class
+
+        Parameters
+        ----------
+        dataset_path (str): Path to directory containing data
+        image_shape (int): Shape to resize images to
+        device (torch device): device to move data to
+        raw_data_summary_csv (str): CSV file containing data information
+        num_frames (int): Number of frames to use for each video (If video is shorter than this replica
+        task (str): task to create the dataset for (must be one of
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv, quality])
+        view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
+        """
+
+        super().__init__()
+
+        # Input checks
+        assert task in ['all_ef',
+                        'high_risk_ef',
+                        'medium_ef_risk',
+                        'slight_ef_risk',
+                        'normal_ef',
+                        'esv',
+                        'edv'], 'Specified task is not supported'
+        assert view in ['all_views',
+                        'ap2',
+                        'ap4'], 'Specified view is not supported'
+
+        # Obtain data paths and labels
+        # Load required CSV file
+        reports_dir = os.path.join(dataset_path, 'Reports')
+        text_report_paths = os.listdir(reports_dir)
+        raw_data_summary = pd.read_csv(os.path.join(dataset_path, raw_data_summary_csv))
+
+        # Define regex strings needed to find Accession number and EF value
+        pattern = re.compile('(?<=Accession No:)\s*\d*|(?<=LV EF \(Biplane\):)\s*\d*|(?<=LV EDV index:)\s*\d*\.\d*|(?<=LV ESV index:)\s*\d*\.\d*')
+
+        # Initialize variables
+        self.labels = list()
+        self.patient_data_dirs = list()
+
+        # Go through each text report and obtain EF value if cine data exists
+        for file in text_report_paths:
+
+            label_file =open(os.path.join(reports_dir, file), errors='ignore')
+            label_str = label_file.read()
+
+            matches = pattern.findall(label_str)
+
+            if len(matches) == 4:
+
+                # Get labels based on task
+                if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
+                    label = np.array(float(matches[1]), dtype=np.float32)
+                elif task == 'esv':
+                    label = np.array(float(matches[3]), dtype=np.float32)
+                else:
+                    label = np.array(float(matches[2]), dtype=np.float32)
+
+                # Find the corresponding cine video path using Accession number
+                match_df = raw_data_summary.loc[raw_data_summary['AccessionNumber'] ==
+                                                int(matches[0])]
+
+                # Append .mat to video paths (preprocessed versions are saved in .mat format)
+                if match_df['path'].values.tolist():
+                    patient_data_dir = os.path.splitext(os.path.basename(match_df['path'].values.tolist()[0]))[0]+'.mat'
+
+                    if view == 'all_views':
+                        patient_data_dir = os.path.join(dataset_path, patient_data_dir)
+                        if os.path.exists(patient_data_dir):
+                            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                                           labels=self.labels,
+                                                           label_to_add=label,
+                                                           path_to_add=patient_data_dir,
+                                                           task=task)
+                    elif view == 'ap2' and patient_data_dir[0:3] == 'AP2':
+                        patient_data_dir = os.path.join(dataset_path, patient_data_dir)
+                        if os.path.exists(patient_data_dir):
+                            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                                           labels=self.labels,
+                                                           label_to_add=label,
+                                                           path_to_add=patient_data_dir,
+                                                           task=task)
+                    elif view == 'ap4' and patient_data_dir[0:3] == 'AP4':
+                        patient_data_dir = os.path.join(dataset_path, patient_data_dir)
+                        if os.path.exists(patient_data_dir):
+                            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                                           labels=self.labels,
+                                                           label_to_add=label,
+                                                           path_to_add=patient_data_dir,
+                                                           task=task)
+
+        # Extract the number of available data
+        self.num_samples = len(self.patient_data_dirs)
+
+        # Normalization operation
+        self.trans = Compose([ToTensor(),
+                              Normalize((0.5), (0.5))])
+        self.image_shape = image_shape
+
+        # Other attributes
+        self.device = device
+        self.task = task
+
+    def __getitem__(self, idx):
+        """
+        Get the sample video and label at idx
+
+        Parameters
+        ----------
+        idx (int): Index to fetch data for
+
+        Returns
+        -------
+        (Torch tensors) for video and corresponding label
+        """
+
+        # Get the label
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
+        # extract video
+        cine_vid = loadmat(self.patient_data_dirs[idx], simplify_cells=True)['resized']
+        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
+
+        # Move to correct device
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
+
+        return cine_vid, label
+
+    def __len__(self):
+        """
+        Provides length of the dataset
+
+        Returns
+        -------
+            (int): Indicates the number of available samples for the task
+        """
+
+        return self.num_samples
 
 
 if __name__ == '__main__':
