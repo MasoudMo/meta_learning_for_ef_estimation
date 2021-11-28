@@ -417,7 +417,6 @@ class EchoNetEfDataset(Dataset):
 if __name__ == '__main__':
 
     # Example code on usage of datasets
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     dataset = EchoNetEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/EchoNet-Dynamic/EchoNet-Dynamic',

@@ -1,7 +1,7 @@
 from data import CamusEfDataset, EchoNetEfDataset
 import torch
 import logging
-from model import Resnet2Plus1D
+from model import Resnet2Plus1D, CustomCNN3D
 from npf.architectures import MLP, merge_flat_input
 from npf import LNP
 from functools import partial
@@ -53,9 +53,44 @@ def main():
                                                         image_shape=128,
                                                         device=device,
                                                         task='medium_ef_risk',
+                                                        view='ap4'),
+                  'camus_ap2_slight_ef': CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
+                                                        image_shape=128,
+                                                        device=device,
+                                                        task='slight_ef_risk',
+                                                        view='ap2'),
+                  'camus_ap4_slight_ef': CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
+                                                        image_shape=128,
+                                                        device=device,
+                                                        task='slight_ef_risk',
+                                                        view='ap4'),
+                  'camus_ap2_normal_ef': CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
+                                                        image_shape=128,
+                                                        device=device,
+                                                        task='normal_ef',
+                                                        view='ap2'),
+                  'camus_ap4_normal_ef': CamusEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/camus',
+                                                        image_shape=128,
+                                                        device=device,
+                                                        task='normal_ef',
                                                         view='ap4')})
 
-    x_encoder = Resnet2Plus1D(output_dim=R_dim)
+    validation_task = EchoNetEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/EchoNet-Dynamic/EchoNet-Dynamic',
+                                       device=device,
+                                       max_frames=250,
+                                       nth_frame=1,
+                                       task='all_ef')
+
+    validation_dataloader = DataLoader(validation_task, batch_size=10, collate_fn=custom_collate_fn)
+
+    x_encoder = CustomCNN3D(input_dim=128,
+                            n_conv_layers=3,
+                            out_channels=[10, 60, 128],
+                            kernel_sizes=3,
+                            pool_sizes=3,
+                            output_dim=128,
+                            cnn_dropout_p=0,
+                            fc_dropout_p=0)
     xy_encoder = merge_flat_input(partial(MLP, n_hidden_layers=2, hidden_size=R_dim*2), is_sum_merge=True)
     decoder = merge_flat_input(partial(MLP, n_hidden_layers=4, hidden_size=R_dim), is_sum_merge=True,)
     lnp_model = LNP(x_dim=128,
@@ -67,6 +102,9 @@ def main():
                     n_z_samples_test=32,
                     XYEncoder=xy_encoder,
                     Decoder=decoder)
+
+    x_encoder = x_encoder.to(device)
+    lnp_model = lnp_model.to(device)
 
     optimizer = torch.optim.Adam(list(lnp_model.parameters()) + list(x_encoder.parameters()), lr=0.00001)
 
