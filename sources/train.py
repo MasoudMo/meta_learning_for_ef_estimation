@@ -214,6 +214,7 @@ def main():
             optimizer.step()
 
             logger.info('Split {} NPML: {}'.format(i, loss.detach().item()))
+            torch.cuda.empty_cache()
 
         x_encoder.eval()
         lnp_model.eval()
