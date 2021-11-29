@@ -1,0 +1,58 @@
+model: &model
+  checkpoint_path: ''
+  encoder:
+    name: resnet2plus1d
+    dim: 128
+    num_layers: 2
+
+  decoder:
+    name: mlp
+    num_layers: 4
+
+  np:
+    name: lnp
+    x_dim: 128
+    y_dim: 1
+    is_q_zCct: False
+    n_z_samples_train: 1
+    n_z_samples_test: 32
+    encoded_path: 'latent'
+
+
+train: &train
+  num_epochs: 100
+
+  optimizer: &optimizer
+    name: sgd
+    lr: 0.3
+    momentum: 0.9
+    nesterov: False
+    weight_decay: 0.0001
+
+  lr_schedule: &lr_schedule
+    name: custom
+    milestones: [40, 80]
+    gamma: 0.2
+
+
+eval: &eval
+  standard: acc
+
+
+data: &data
+  root: 'data'
+  num_workers: 8
+
+  task1:
+    name: 'campus'
+    task: 'high_risk_ef'
+    view: 'ap2'
+    image_shape: 128
+
+  task2:
+    name: 'campus'
+    task: 'high_risk_ef'
+    view: 'ap4'
+    image_shape: 128
+
+

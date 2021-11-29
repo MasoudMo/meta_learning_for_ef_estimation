@@ -10,6 +10,13 @@ from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
 
 
+#class CustomCollator(object):
+#    def __init__(self, encoder):
+#        self.encoder = encoder
+#
+#    def __call__(self, batch):
+#        return custom_collate_fn(self.encoder, batch)
+
 def custom_collate_fn(batch):
     """
     Custom collate function to handle variable size videos
@@ -119,7 +126,7 @@ class CamusEfDataset(Dataset):
     def __init__(self,
                  dataset_path,
                  image_shape,
-                 device=None,
+                 #device=None,
                  task='all_ef',
                  view='all_views'):
         """
@@ -219,7 +226,7 @@ class CamusEfDataset(Dataset):
         self.image_shape = image_shape
 
         # Other attributes
-        self.device = device
+        #self.device = device
         self.task = task
 
     def __getitem__(self, idx):
@@ -246,8 +253,8 @@ class CamusEfDataset(Dataset):
         cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
 
         # Move to correct device
-        cine_vid.to(self.device)
-        label.to(self.device)
+        #cine_vid.to(self.device)
+        #label.to(self.device)
 
         return cine_vid, label
 
@@ -291,7 +298,7 @@ class EchoNetEfDataset(Dataset):
 
     def __init__(self,
                  dataset_path,
-                 device=None,
+                 #device=None,
                  max_frames=250,
                  nth_frame=1,
                  task='all_ef'):
@@ -341,7 +348,7 @@ class EchoNetEfDataset(Dataset):
                               Normalize((0.5), (0.5))])
 
         # Other attributes
-        self.device = device
+        #self.device = device
         self.max_frames = max_frames
         self.nth_frame = nth_frame
 
@@ -363,9 +370,11 @@ class EchoNetEfDataset(Dataset):
         cine_vid = self.trans(cine_vid).unsqueeze(1)
 
         # Move to correct device
-        cine_vid.to(self.device)
-        label.to(self.device)
+        #cine_vid.to(self.device)
+        #label.to(self.device)
 
+        }
+        }
         return cine_vid, label
 
     def __len__(self):

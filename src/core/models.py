@@ -30,8 +30,7 @@ class Resnet2Plus1D(nn.Module):
         # Other parameters
         self.fc_dropout_p = fc_dropout_p
 
-    def forward(self,
-                x):
+    def forward(self, x):
 
         x = self.r2p1model(x.permute(0, 2, 1, 3, 4))
 
