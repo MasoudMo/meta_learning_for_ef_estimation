@@ -43,7 +43,6 @@ venv
 ENV
 
 # Train
-train_*.py
 
 # Git
 !.keep
@@ -52,7 +51,6 @@ train_*.py
 *.pyc
 *.log
 *.logs
-*.sh
 *.tar
 *.zip
 *.tar
@@ -63,4 +61,3 @@ train_*.py
 *.idea
 *.bak
 *.npy
-*.sh
