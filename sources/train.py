@@ -28,7 +28,7 @@ def main():
 
     R_dim = 128
     epochs = 100
-    max_samples = 15
+    max_samples = 10
 
     # Device to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -148,7 +148,7 @@ def main():
         task = tasks[task]
 
         # Randomly choose a context set split size (at least 5% and at most 95%)
-        context_split = random.uniform(0.05, 0.95)
+        context_split = random.uniform(0.2, 0.8)
 
         # Randomly split the task into context and target sets
         context_size = floor(context_split * len(task))
@@ -157,13 +157,13 @@ def main():
         if context_size > max_samples or target_size > max_samples:
             num_splits = ceil(max(context_size, target_size) / max_samples)
 
-            context_split_size = floor(context_size/num_splits)
-            target_split_size = floor(target_size/num_splits)
+            context_split_size = ceil(context_size/num_splits)
+            target_split_size = ceil(target_size/num_splits)
 
             splits = [context_split_size] * num_splits
-            splits[-1] = splits[-1] + (context_size % num_splits)
+            splits[-1] = splits[-1] - (context_size % num_splits)
             splits = splits + ([target_split_size] * num_splits)
-            splits[-1] = splits[-1] + (target_size % num_splits)
+            splits[-1] = splits[-1] - (target_size % num_splits)
 
         else:
             num_splits = 1
