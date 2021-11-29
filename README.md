@@ -23,4 +23,4 @@ bash scripts/run.sh --config_path configs/default.yml --save_dir path/to/save/di
 To evaluate a model, refer to the command below. Note that save_dir should be syncronized with the save_dir used for training.
 ```bash
 bash scripts/run.sh --config_path configs/default.yml --save_dir path/to/save/dir --eval_only true
-`
+```
