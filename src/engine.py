@@ -4,27 +4,8 @@ from src.utils import util
 from src import builders
 
 
-from data import CamusEfDataset, EchoNetEfDataset
-import torch
-import logging
-from model import Resnet2Plus1D
-from npf.architectures import MLP, merge_flat_input
-from npf import LNP
-from functools import partial
-from npf import NLLLossLNPF
-from torch.utils.data import random_split, DataLoader
 import random
-from math import floor
-from data import custom_collate_fn
 
-
-# Initialize logger
-logger_level = logging.INFO
-logger = logging.getLogger('meta_learning_for_ef_estimation')
-logger.setLevel(logger_level)
-ch = logging.StreamHandler()
-ch.setLevel(logger_level)
-logger.addHandler(ch)
 
 random.seed(0)
 torch.manual_seed(0)
@@ -79,7 +60,7 @@ class Engine(BaseEngine):
         # Build a model
         self.models = builders.model_builder.build(
             self.model_config, self.logger)
-        self.models = util.to_device(self.model, self.device)
+        self.models = util.to_device(self.models, self.device)
 
         # Build an optimizer, scheduler and criterion
         self.optimizer = builders.optimizer_builder.build(
@@ -107,7 +88,7 @@ class Engine(BaseEngine):
 
 
     def _train(self):
-        start_epoch, num_steps = 0, 0
+        start_epoch = 0
         num_epochs = self.train_config.get('num_epochs', 100)
 
         self.logger.info(
@@ -117,7 +98,7 @@ class Engine(BaseEngine):
         # Start training
         for epoch in range(start_epoch, start_epoch + num_epochs):
             train_start = time.time()
-            num_steps = self._train_one_epoch(epoch, num_steps)
+            self._train_one_epoch(epoch)
             train_time = time.time() - train_start
 
             lr = self.scheduler.get_lr()[0]
@@ -129,97 +110,70 @@ class Engine(BaseEngine):
             self.scheduler.step()
             self.loss_meter.reset()
 
-            #if epoch % 1 == 0:
-            #    eval_metrics = self._evaluate_once(epoch, num_steps)
-            #    self.checkpointer.save(epoch, num_steps, eval_metrics)
-            #    self.logger.info(
-            #        '[Epoch {}] - {}: {:4f}'.format(
-            #            epoch, self.eval_standard, eval_metrics[self.eval_standard]))
-            #    self.logger.info(
-            #        '[Epoch {}] - best {}: {:4f}'.format(
-            #            epoch, self.eval_standard, self.checkpointer.best_eval_metric))
+            if epoch % 1 == 0:
+                eval_metrics = self._evaluate_once(epoch)
+                self.checkpointer.save(epoch, eval_metrics)
+                self.logger.info(
+                    '[Epoch {}] - {}: {:4f}'.format(
+                        epoch, self.eval_standard, eval_metrics[self.eval_standard]))
+                self.logger.info(
+                    '[Epoch {}] - best {}: {:4f}'.format(
+                        epoch, self.eval_standard, self.checkpointer.best_eval_metric))
 
-    def _train_one_epoch(self, epoch, num_steps):
+    def _train_one_epoch(self, epoch):
         util.to_train(self.models)
-        dataloaders = builders.dataloader_builder.build(self.tasks)
-        context_dataloader = dataloaders['context']
-        target_dataloader = dataloaders['target']
+        dataloaders = builders.dataloader_builder.build_train(
+            self.data_config, self.tasks)
+
+        for i, dataloader in enumerate(dataloaders):
+            context_dataloader, target_dataloader = dataloader['context'], dataloader['target']
+            for j, (context_input, context_label), (target_input, target_label) in enumerate(
+                zip(context_dataloader, target_dataloader)):
+                context_input, context_label =\
+                    context_input.to(self.device), context_label.to(self.device)
+                target_input, target_label =\
+                    target_input.to(self.deivce), target_label.to(self.device)
+
+                output = self.models['np'](
+                    self.models['encoder'](context_input), context_label.unsqueeze(0),
+                    self.models['encdoer'](target_input), target_label.unsqueeze(0))
+
+                # Compute the NPML objective
+                loss = self.criterion(output, target_label)
+
+                # Back propagate
+                loss.backward()
+
+                # Do one optimization step
+                self.optimizer.step()
+
+                self.logger.info('[Epoch {} Loader {}/{}] NPML train loss: {}'.format(
+                    epoch, i, len(dataloaders), loss.detach().item()))
+
+        torch.cuda.empty_cache()
+        return
+
+    def _evaluate_once(self, epoch):
+        util.to_eval(self.models)
+        dataloader = builders.dataloader_builder.build_test(
+            self.data_config, self.tasks)
+        context_dataloader, target_dataloader =\
+            dataloader['context'], dataloader['test']
 
         for (context_input, context_label), (target_input, target_label) in zip(
             context_dataloader, target_dataloader):
-            context_input, context_label =\
-                context_input.to(self.device), context_label.to(self.device)
-            target_input, target_label =\
-                target_input.to(self.deivce), target_label.to(self.device)
 
+            # Run the LNP model
             output = self.models['np'](
-                self.models['encoder'](context_input), context_label,
-                self.models['encdoer'](target_input), target_label)
+                self.models['encoder'](context_input), context_label.unsqueeze(0),
+                self.models['encdoer'](target_input), target_label.unsqueeze(0))
 
             # Compute the NPML objective
             loss = self.criterion(output, target_label)
 
-            # Back propagate
-            loss.backward()
+            self.logger.info(
+                '[Epoch {}] - NPML test loss: {:4f}'.format(
+                    epoch, loss.detach().item()))
 
-            # Do one optimization step
-            self.optimizer.step()
-
-            self.logger.info('NPML: {}'.format(loss.detach().item()))
-
-        torch.cuda.empty_cache()
-
-
-    #def _evaluate_once(self, epoch, num_steps):
-    #    dataloader = self.dataloaders['val']
-    #    num_batches = len(dataloader)
-
-    #    self.model.eval()
-    #    self.logger.info('[Epoch {}] Evaluating...'.format(epoch))
-
-    #    dataloaders = builders.dataloader_builder.build(self.tasks)
-    #    target_dataloader = dataloaders['target']
-
-
-    #    for i, input_dict in enumerate(dataloader):
-    #        with torch.no_grad():
-    #            input_dict = util.to_device(input_dict, self.device)
-
-    #            # Forward propagation
-    #            output_dict = self.models['model'](input_dict)
-    #            output_dict['labels'] = input_dict['labels']
-
-    #            # Print losses
-    #            self.evaluator.update(output_dict)
-
-    #            # Accumulate precision and recall
-    #            self.pr_meter.accumulate(
-    #                output_dict['labels'], output_dict['logits'])
-
-    #            #self.logger.info('[Epoch {}] Evaluation batch {}/{}'.format(
-    #            #    epoch, i+1, num_batches))
-    #            #if epoch == 49 and i < 10:
-    #            #    criterion_name = self.train_config['criterion']['name']
-    #            #    if criterion_name == 'l2':
-    #            #        preds = output_dict['logits']
-    #            #    elif criterion_name == 'cross_entropy' or criterion_name == 'softmax_l2':
-    #            #        preds = torch.nn.functional.softmax(output_dict['logits'], dim=1)
-    #            #    self.writer.add_histogram(tag='prediction results {}'.format(i), values=preds[:1], global_step=num_steps)
-
-
-    #    self.evaluator.print_log(epoch, num_steps)
-    #    torch.cuda.empty_cache()
-    #    eval_metric = self.evaluator.compute()
-
-    #    # Add precision and recall curves for each class
-    #    labels, preds = self.pr_meter.get_labels_and_preds()
-    #    for cls_idx, (label, pred) in enumerate(zip(labels, preds)):
-    #        self.writer.add_pr_curve(
-    #            'pr {} class'.format(i), label, pred, global_step=num_steps)
-
-    #    # Reset the evaluator
-    #    self.evaluator.reset()
-    #    return {self.eval_standard: eval_metric}
-
-
+        return loss
 
