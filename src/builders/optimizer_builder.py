@@ -11,7 +11,7 @@ def build(optim_config, models, logger):
     optim_params = deepcopy(optim_config)
     optimizer_name = optim_params.pop('name')
     optim_params['params'] =\
-        list(models['np'].parameters()) + list(models['encoder'].parameters())
+        list(models['np'].parameters()) + list(models['x_encoder'].parameters())
 
     if optimizer_name in OPTIMIZERS:
         optimizer = OPTIMIZERS[optimizer_name](**optim_params)
