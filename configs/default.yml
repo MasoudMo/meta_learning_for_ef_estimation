@@ -1,8 +1,11 @@
 model: &model
   checkpoint_path: ''
-  encoder:
+  x_encoder:
     name: resnet2plus1d
     dim: 128
+    num_layers: 2
+
+  xy_encoder:
     num_layers: 2
 
   decoder:
@@ -36,12 +39,14 @@ train: &train
 
 
 eval: &eval
-  standard: acc
+  standard: loss
 
 
 data: &data
   root: 'data'
   num_workers: 8
+  max_samples: 10
+  context_ratio_range: [0.05, 0.95]
 
   task1:
     name: 'campus'
