@@ -309,6 +309,8 @@ class EchoNetEfDataset(Dataset):
                     [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
         """
 
+        super().__init__()
+
         # Input checks
         assert task in ['all_ef',
                         'high_risk_ef',
@@ -378,8 +380,8 @@ class EchoNetEfDataset(Dataset):
         cine_vid = cine_vid[0::self.nth_frame]
 
         # clip if longer than max_frames
-        if cine_vid.shape[0] > self.max_frames:
-            cine_vid = cine_vid[:self.max_frames]
+        if cine_vid.shape[2] > self.max_frames:
+            cine_vid = cine_vid[:, :, :self.max_frames]
 
         cine_vid = self.trans(cine_vid).unsqueeze(1)
 
