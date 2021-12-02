@@ -257,7 +257,7 @@ def main():
 
             # Evaluate MAE loss and r2 score
             p_yCc = output[0]
-            output_samples = p_yCc.sample().squeeze()
+            output_samples = p_yCc.mean.squeeze()
             output_mean = output_samples.mean(dim=0)
             ef_r2_score = r2_score(y_true=y_target.squeeze().detach().cpu().numpy(),
                                    y_pred=output_mean.detach().cpu().numpy())
@@ -266,10 +266,10 @@ def main():
             # Compute the NPML objective
             loss = loss_func(output, y_target)
 
-            logger.info('Epoch {} Validation: NPML = {}  MAE = {}  R2 Score = {}'.format(epoch,
-                                                                                         loss.detach().item(),
-                                                                                         ef_mae_loss.detach().item(),
-                                                                                         ef_r2_score))
+            logger.info('Epoch {} Validation: NPML = {}  MAE = {}  R2 Score = {} \n'.format(epoch,
+                                                                                            loss.detach().item(),
+                                                                                            ef_mae_loss.detach().item(),
+                                                                                            ef_r2_score))
 
 
 if __name__ == '__main__':
