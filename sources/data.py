@@ -475,7 +475,7 @@ class LVBiplaneEFDataset(Dataset):
         num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit)
         raw_data_summary_csv (str): CSV file containing data information
         task (str): task to create the dataset for (must be one of
-                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv, quality])
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
         view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
         """
 

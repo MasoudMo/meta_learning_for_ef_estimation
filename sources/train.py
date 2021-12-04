@@ -1,4 +1,4 @@
-from data import CamusEfDataset, EchoNetEfDataset, LVBiplaneEFDataset
+from data import CamusEfDataset, EchoNetEfDataset, LVBiplaneEFDataset, DelEfDataset, NatEfDataset, PocEfDataset
 import torch
 import logging
 from model import CustomCNN3D
@@ -10,7 +10,7 @@ from torch.utils.data import random_split, DataLoader
 import random
 from math import floor, ceil
 from data import custom_collate_fn
-from torch.nn import L1Loss
+from torch.nn import MSELoss
 from sklearn.metrics import r2_score
 
 
@@ -30,89 +30,69 @@ def main():
 
     R_dim = 128
     epochs = 100
-    max_samples = 20
-    datasets_path = '/data'
+    max_samples = 10
+    num_frames = 32
+    datasets_path = 'D:/Workspace/RCL/datasets'
 
     # Device to use
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     logger.info("Using device: {}".format(device))
 
     # load task datasets
-    tasks = dict({'echo_ap4_high_risk_ef': EchoNetEfDataset(datasets_root_path=datasets_path,
-                                                            device=device,
-                                                            max_frames=30,
-                                                            nth_frame=1,
-                                                            task='high_risk_ef'),
-                  'echo_ap4_medium_risk_ef': EchoNetEfDataset(datasets_root_path=datasets_path,
-                                                              device=device,
-                                                              max_frames=30,
-                                                              nth_frame=1,
-                                                              task='medium_ef_risk'),
-                  'echo_ap4_slight_risk_ef': EchoNetEfDataset(datasets_root_path=datasets_path,
-                                                              device=device,
-                                                              max_frames=30,
-                                                              nth_frame=1,
-                                                              task='slight_ef_risk'),
-                  'echo_ap4_normal_ef': EchoNetEfDataset(datasets_root_path=datasets_path,
-                                                         device=device,
-                                                         max_frames=30,
-                                                         nth_frame=1,
-                                                         task='normal_ef'),
-                  'lv_biplane_ap2_high_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                    image_shape=128,
-                                                                    device=device,
-                                                                    raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                    task='high_risk_ef',
-                                                                    view='ap2'),
-                  'lv_biplane_ap4_high_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                    image_shape=128,
-                                                                    device=device,
-                                                                    raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                    task='high_risk_ef',
-                                                                    view='ap4'),
-                  'lv_biplane_ap2_medium_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                      image_shape=128,
-                                                                      device=device,
-                                                                      raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                      task='medium_ef_risk',
-                                                                      view='ap2'),
-                  'lv_biplane_ap4_medium_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                      image_shape=128,
-                                                                      device=device,
-                                                                      raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                      task='medium_ef_risk',
-                                                                      view='ap4'),
-                  'lv_biplane_ap2_slight_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                      image_shape=128,
-                                                                      device=device,
-                                                                      raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                      task='slight_ef_risk',
-                                                                      view='ap2'),
-                  'lv_biplane_ap4_slight_risk_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                      image_shape=128,
-                                                                      device=device,
-                                                                      raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                      task='slight_ef_risk',
-                                                                      view='ap4'),
-                  'lv_biplane_ap2_normal_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                 image_shape=128,
-                                                                 device=device,
-                                                                 raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                 task='normal_ef',
-                                                                 view='ap2'),
-                  'lv_biplane_ap4_normal_ef': LVBiplaneEFDataset(datasets_root_path=datasets_path,
-                                                                 image_shape=128,
-                                                                 device=device,
-                                                                 raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
-                                                                 task='normal_ef',
-                                                                 view='ap4')})
+    tasks = dict()
 
+    # EchoNet dataset tasks
+    for view in ['ap4']:
+        for task in ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv']:
+            tasks.update({'echonet_' + view + '_' + task: EchoNetEfDataset(datasets_root_path=datasets_path,
+                                                                           device=device,
+                                                                           num_frames=num_frames,
+                                                                           nth_frame=1,
+                                                                           task=task)})
+
+    # Biplane dataset tasks
+    for view in ['ap2', 'ap4']:
+        for task in ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv']:
+            tasks.update({'lv_biplane_' + view + '_' + task: LVBiplaneEFDataset(datasets_root_path=datasets_path,
+                                                                                num_frames=num_frames,
+                                                                                device=device,
+                                                                                raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
+                                                                                task=task,
+                                                                                view=view)})
+
+    # Del dataset tasks
+    for view in ['ap2', 'ap4']:
+        for task in ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
+            tasks.update({'del_lvef_' + view + '_' + task: DelEfDataset(datasets_root_path=datasets_path,
+                                                                        device=device,
+                                                                        num_frames=num_frames,
+                                                                        task=task,
+                                                                        view=view)})
+
+    # Nat dataset tasks
+    for view in ['ap2', 'ap4']:
+        for task in ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']:
+            tasks.update({'nat_lvef_' + view + '_' + task: NatEfDataset(datasets_root_path=datasets_path,
+                                                                        device=device,
+                                                                        num_frames=num_frames,
+                                                                        task=task,
+                                                                        view=view)})
+
+    # Poc dataset tasks
+    for view in ['ap2', 'ap4']:
+        for task in ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']:
+            tasks.update({'poc_lvef_' + view + '_' + task: PocEfDataset(datasets_root_path=datasets_path,
+                                                                        device=device,
+                                                                        num_frames=num_frames,
+                                                                        task=task,
+                                                                        view=view)})
+
+    # Camus used for validation
     validation_task = CamusEfDataset(datasets_root_path=datasets_path,
                                      image_shape=128,
                                      device=device,
                                      task='all_ef',
                                      view='all_views')
-    validation_loss = L1Loss()
 
     x_encoder = CustomCNN3D(input_dim=128,
                             n_conv_layers=3,
@@ -140,6 +120,7 @@ def main():
     optimizer = torch.optim.Adam(list(lnp_model.parameters()) + list(x_encoder.parameters()), lr=0.00001)
 
     loss_func = NLLLossLNPF()
+    validation_loss = MSELoss()
 
     for epoch in range(epochs):
 
@@ -149,7 +130,7 @@ def main():
         # Randomly sample a task
         task = random.choice(list(tasks.keys()))
         logger.info('The chosen task is: ' + task)
-        task = tasks['echo_ap4_slight_risk_ef']
+        task = tasks[task]
 
         # Randomly choose a context set split size (at least 5% and at most 95%)
         context_split = random.uniform(0.2, 0.8)
@@ -267,7 +248,7 @@ def main():
             # Compute the NPML objective
             loss = loss_func(output, y_target)
 
-            logger.info('Epoch {} Validation: NPML = {}  MAE = {}  R2 Score = {} \n'.format(epoch,
+            logger.info('Epoch {} Validation: NPML = {}  MSE = {}  R2 Score = {} \n'.format(epoch,
                                                                                             loss.detach().item(),
                                                                                             ef_mae_loss.detach().item(),
                                                                                             ef_r2_score))
