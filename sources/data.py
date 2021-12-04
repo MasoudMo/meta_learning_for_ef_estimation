@@ -118,7 +118,7 @@ class CamusEfDataset(Dataset):
     """
 
     def __init__(self,
-                 dataset_path,
+                 datasets_root_path,
                  image_shape,
                  device=None,
                  task='all_ef',
@@ -128,7 +128,7 @@ class CamusEfDataset(Dataset):
 
         Parameters
         ----------
-        dataset_path (str): Path to directory containing data
+        datasets_root_path (str): Path to directory containing all datasets
         image_shape (int): Shape to resize images to
         device (torch device): device to move data to
         num_frames (int): Number of frames to use for each video (If video is shorter than this replica
@@ -151,6 +151,8 @@ class CamusEfDataset(Dataset):
         assert view in ['all_views',
                         'ap2',
                         'ap4'], 'Specified view is not supported'
+
+        dataset_path = os.path.join(datasets_root_path, 'camus')
 
         # Obtain file dirs
         data_dirs = os.listdir(dataset_path)
@@ -291,7 +293,7 @@ class EchoNetEfDataset(Dataset):
     """
 
     def __init__(self,
-                 dataset_path,
+                 datasets_root_path,
                  device=None,
                  max_frames=250,
                  nth_frame=1,
@@ -301,7 +303,7 @@ class EchoNetEfDataset(Dataset):
 
         Parameters
         ----------
-        dataset_path (str): Path to directory containing data
+        datasets_root_path (str): Path to directory containing data
         device (torch device): device to move data to
         max_frames (int): Max number of frames to use for each video (If video is shorter than this replicate it to fit)
         nth_frame (int): Only extract every nth frame
@@ -310,6 +312,8 @@ class EchoNetEfDataset(Dataset):
         """
 
         super().__init__()
+
+        dataset_path = os.path.join(datasets_root_path, 'echonet')
 
         # Input checks
         assert task in ['all_ef',
@@ -443,7 +447,7 @@ class LVBiplaneEFDataset(Dataset):
     """
 
     def __init__(self,
-                 dataset_path,
+                 datasets_root_path,
                  image_shape,
                  device=None,
                  raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
@@ -454,7 +458,7 @@ class LVBiplaneEFDataset(Dataset):
 
         Parameters
         ----------
-        dataset_path (str): Path to directory containing data
+        datasets_root_path (str): Path to directory containing all datasets
         image_shape (int): Shape to resize images to
         device (torch device): device to move data to
         raw_data_summary_csv (str): CSV file containing data information
@@ -465,6 +469,8 @@ class LVBiplaneEFDataset(Dataset):
         """
 
         super().__init__()
+
+        dataset_path = os.path.join(datasets_root_path, 'biplane_lvef')
 
         # Input checks
         assert task in ['all_ef',
