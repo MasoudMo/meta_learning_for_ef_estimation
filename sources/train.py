@@ -3,7 +3,7 @@ import torch
 import logging
 from model import CustomCNN3D
 from npf.architectures import MLP, merge_flat_input
-from npf import LNP
+from npf import LNP, AttnLNP
 from functools import partial
 from npf import NLLLossLNPF
 from torch.utils.data import random_split, DataLoader
@@ -104,15 +104,14 @@ def main():
                             fc_dropout_p=0)
     xy_encoder = merge_flat_input(partial(MLP, n_hidden_layers=2, hidden_size=R_dim*2), is_sum_merge=True)
     decoder = merge_flat_input(partial(MLP, n_hidden_layers=4, hidden_size=R_dim), is_sum_merge=True,)
-    lnp_model = LNP(x_dim=128,
-                    y_dim=1,
-                    r_dim=R_dim,
-                    encoded_path='latent',
-                    is_q_zCct=False,
-                    n_z_samples_train=1,
-                    n_z_samples_test=32,
-                    XYEncoder=xy_encoder,
-                    Decoder=decoder)
+    lnp_model = AttnLNP(x_dim=128,
+                        y_dim=1,
+                        r_dim=R_dim,
+                        is_q_zCct=False,
+                        n_z_samples_train=1,
+                        n_z_samples_test=32,
+                        XYEncoder=xy_encoder,
+                        Decoder=decoder)
 
     x_encoder = x_encoder.to(device)
     lnp_model = lnp_model.to(device)
