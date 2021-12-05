@@ -1,12 +1,16 @@
-from src.core.evaluators import AccEvaluator
+from src.core.evaluators import R2Evaluator, MaeEvaluator
 
 EVAL_TYPES = {
-    'acc': AccEvaluator,
+    'r2': R2Evaluator,
+    'mae': MaeEvaluator,
 }
 
 def build(eval_config, logger):
-    standard = eval_config['standard']
-    evaluator = EVAL_TYPES[standard](logger)
+    standards = eval_config['standards']
+    evaluators = {}
+    for standard in standards:
+        evaluator = EVAL_TYPES[standard](logger)
+        evaluators[standard] = evaluator
 
     logger.infov('Evaluator is build.')
-    return evaluator
+    return evaluators

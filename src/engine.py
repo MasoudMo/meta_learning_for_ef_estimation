@@ -1,7 +1,9 @@
 import torch
 import time
 from src.utils import util
-from src import builders
+from src.builders import model_builder, task_builder, dataloader_builder,\
+    optimizer_builder, criterion_builder, checkpointer_builder, evaluator_builder,\
+    meter_builder, scheduler_builder
 
 
 import random
@@ -54,28 +56,28 @@ class Engine(BaseEngine):
 
     def _build(self, mode, init=False):
         # Build tasks
-        self.tasks = builders.task_builder.build(
+        self.tasks = task_builder.build(
             self.data_config, self.logger)
 
         # Build a model
-        self.models = builders.model_builder.build(
+        self.models = model_builder.build(
             self.model_config, self.logger)
         self.models = util.to_device(self.models, self.device)
 
         # Build an optimizer, scheduler and criterion
-        self.optimizer = builders.optimizer_builder.build(
+        self.optimizer = optimizer_builder.build(
             self.train_config['optimizer'], self.models, self.logger)
-        self.scheduler = builders.scheduler_builder.build(
+        self.scheduler = scheduler_builder.build(
             self.train_config, self.optimizer, self.logger)
-        self.criterion = builders.criterion_builder.build(
+        self.criterion = criterion_builder.build(
             self.train_config, self.model_config, self.logger)
-        self.loss_meter = builders.meter_builder.build(
+        self.loss_meter = meter_builder.build(
             self.model_config, self.logger)
-        self.evaluator = builders.evaluator_builder.build(
+        self.evaluators = evaluator_builder.build(
             self.eval_config, self.logger)
 
         # Build a checkpointer
-        self.checkpointer = builders.checkpointer_builder.build(
+        self.checkpointer = checkpointer_builder.build(
             self.save_dir, self.logger, self.models, self.optimizer,
             self.scheduler, self.eval_standard, init=init)
         checkpoint_path = self.model_config.get('checkpoint_path', '')
@@ -122,58 +124,99 @@ class Engine(BaseEngine):
 
     def _train_one_epoch(self, epoch):
         util.to_train(self.models)
-        dataloaders = builders.dataloader_builder.build_train(
-            self.data_config, self.tasks)
+        dataloaders = dataloader_builder.build_train(
+            self.data_config, self.tasks, self.logger)
 
         for i, dataloader in enumerate(dataloaders):
+            context_inputs, context_labels, target_inputs, target_labels = [], [], [], []
             context_dataloader, target_dataloader = dataloader['context'], dataloader['target']
-            for j, (context_input, context_label), (target_input, target_label) in enumerate(
+
+            for j, ((context_input, context_label), (target_input, target_label)) in enumerate(
                 zip(context_dataloader, target_dataloader)):
                 context_input, context_label =\
                     context_input.to(self.device), context_label.to(self.device)
                 target_input, target_label =\
-                    target_input.to(self.deivce), target_label.to(self.device)
+                    target_input.to(self.device), target_label.to(self.device)
 
-                output = self.models['np'](
-                    self.models['encoder'](context_input), context_label.unsqueeze(0),
-                    self.models['encdoer'](target_input), target_label.unsqueeze(0))
+                context_inputs.append(self.models['x_encoder'](context_input))
+                context_labels.append(context_label)
+                target_inputs.append(self.models['x_encoder'](target_input))
+                target_labels.append(target_label)
 
-                # Compute the NPML objective
-                loss = self.criterion(output, target_label)
+            context_inputs = torch.stack(context_inputs)
+            context_labels = torch.stack(context_labels).unsqueeze(0).permute(0, 2, 1)
+            target_inputs = torch.stack(target_inputs)
+            target_labels = torch.stack(target_labels).unsqueeze(0).permute(0, 2, 1)
+            output = self.models['np'](
+                context_inputs, context_labels, target_inputs, target_labels)
 
-                # Back propagate
-                loss.backward()
+            # Compute the NPML objective
+            loss = self.criterion(output, target_label)
 
-                # Do one optimization step
-                self.optimizer.step()
+            # Back propagate
+            loss.backward()
 
-                self.logger.info('[Epoch {} Loader {}/{}] NPML train loss: {}'.format(
-                    epoch, i, len(dataloaders), loss.detach().item()))
+            # Do one optimization step
+            self.optimizer.step()
+
+            self.logger.info('[Epoch {} Loader {}/{}] NPML train loss: {}'.format(
+                epoch, i, len(dataloaders), loss.detach().item()))
 
         torch.cuda.empty_cache()
         return
 
     def _evaluate_once(self, epoch):
         util.to_eval(self.models)
-        dataloader = builders.dataloader_builder.build_test(
-            self.data_config, self.tasks)
+        dataloader = dataloader_builder.build_test(
+            self.data_config, self.tasks, self.logger)
         context_dataloader, target_dataloader =\
-            dataloader['context'], dataloader['test']
+            dataloader['context'], dataloader['target']
 
+        context_inputs, context_labels, target_inputs, target_labels = [], [], [], []
         for (context_input, context_label), (target_input, target_label) in zip(
             context_dataloader, target_dataloader):
+            context_input, context_label =\
+                    context_input.to(self.device), context_label.to(self.device)
+            target_input, target_label =\
+                    target_input.to(self.device), target_label.to(self.device)
 
-            # Run the LNP model
-            output = self.models['np'](
-                self.models['encoder'](context_input), context_label.unsqueeze(0),
-                self.models['encdoer'](target_input), target_label.unsqueeze(0))
+        context_inputs.append(self.models['x_encoder'](context_input))
+        context_labels.append(context_label)
+        target_inputs.append(self.models['x_encoder'](target_input))
+        target_labels.append(target_label)
 
-            # Compute the NPML objective
-            loss = self.criterion(output, target_label)
+        context_inputs = torch.stack(context_inputs)
+        context_labels = torch.stack(context_labels).unsqueeze(0).permute(0, 2, 1)
+        target_inputs = torch.stack(target_inputs)
+        target_labels = torch.stack(target_labels).unsqueeze(0).permute(0, 2, 1)
+        output = self.models['np'](
+            context_inputs, context_labels, target_inputs, target_labels)
 
-            self.logger.info(
-                '[Epoch {}] - NPML test loss: {:4f}'.format(
-                    epoch, loss.detach().item()))
+        # Run the LNP model
+        output = self.models['np'](
+            self.models['x_encoder'](context_input), context_label.unsqueeze(0),
+            self.models['x_encoder'](target_input), target_label.unsqueeze(0))
+
+        # Compute R2 score
+        if 'r2' in self.evaluators:
+            self.evaluators['r2'].update(output, target_label)
+
+        # Compute MAE score
+        if 'mae' in self.evaluators:
+            self.evaluators['mae'].update(output, target_label)
+
+        # Compute test loss
+        loss = self.criterion(output, target_label)
+
+        self.logger.info(
+            '[Epoch {}] - NPML test loss: {:4f}'.format(epoch, loss.detach().item()))
+
+        for standard in self.evaluators:
+            metric = self.evaluators[standard]
+            self.logger.infov(
+                '[Epoch {}] - NPML {} score: {:4f}'.format(
+                    epoch, metric))
+            self.evaluators[standard].reset()
 
         return loss
 

@@ -16,13 +16,14 @@ def build(data_config, logger):
     for task_tmp_name in task_tmp_names:
         task_config = deepcopy(data_config[task_tmp_name])
         data_name = task_config.pop('name')
-        task_config['dataset_path'] = os.path.join(root, data_name)
+        task_config['datasets_root_path'] = root
 
         task_name = '_'.join([data_name, task_config['task'], task_config['view']])
         tasks['train'][task_name] = DATASETS[data_name](**task_config)
         image_shape = task_config['image_shape'] # store it for the test set
 
-    tasks['test'] = DATASETS['camus'](image_shape=image_shape, task='all_ef', view='all_views')
+    tasks['test'] = DATASETS['camus'](image_shape=image_shape, task='all_ef',
+                                      view='all_views', datasets_root_path=root)
     logger.infov(
         'Tasks are built - {}'.format(tasks))
     return tasks

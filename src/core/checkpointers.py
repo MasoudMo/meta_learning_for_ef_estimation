@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 class CustomCheckpointer(object):
     def __init__(self, checkpoint_dir, logger, model,
-                 optimizer, scheduler, eval_standard='accuracy', init=False):
+                 optimizer, scheduler, eval_standard='r2', init=False):
         self.logger = logger
         self.checkpoint_dir = checkpoint_dir
         os.makedirs(self.checkpoint_dir, exist_ok=True)

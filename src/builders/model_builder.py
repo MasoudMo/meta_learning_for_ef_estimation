@@ -1,7 +1,7 @@
 from copy import deepcopy
 from functools import partial
 import npf
-from np.architectures import MLP, merge_flat_input
+from npf.architectures import MLP, merge_flat_input
 from src.core import models
 
 ENCODERS = {
@@ -11,7 +11,7 @@ ENCODERS = {
 
 
 NP_MODLES = {
-    'nlp': npf.LNP
+    'lnp': npf.LNP
 }
 
 def build(model_config, logger):
@@ -23,8 +23,8 @@ def build(model_config, logger):
     # Build a xy_encoder
     xy_encoder_config = model_config['xy_encoder']
     xy_encoder_num_layers = xy_encoder_config['num_layers']
-    xy_encoder = merge_flat_input(
-        partial(MLP, n_hidden_layers=xy_encoder_num_layers), is_sum_merge=True)
+    xy_encoder = merge_flat_input(partial(
+        MLP, n_hidden_layers=xy_encoder_num_layers, hidden_size=xy_encoder_config['hidden_size']), is_sum_merge=True)
 
     # Build a decoder
     decoder_config = deepcopy(model_config['decoder'])
@@ -34,7 +34,7 @@ def build(model_config, logger):
     np_config = deepcopy(model_config['np'])
     np_model_name = np_config.pop('name', 'nlp')
 
-        decoder = merge_flat_input(
+    decoder = merge_flat_input(
         partial(MLP, n_hidden_layers=decoder_num_layers), is_sum_merge=True)
     model = NP_MODLES[np_model_name](
         XYEncoder=xy_encoder, Decoder=decoder, **np_config)

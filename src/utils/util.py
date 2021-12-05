@@ -66,6 +66,8 @@ def to_device(dict, device):
     for key in dict.keys():
         if isinstance(dict[key], torch.Tensor):
             dict[key] = dict[key].to(device)
+        else:
+            dict[key].to(device)
     return dict
 
 # Other

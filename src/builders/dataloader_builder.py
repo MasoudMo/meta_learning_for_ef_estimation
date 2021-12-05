@@ -7,12 +7,12 @@ from src.core.datasets import custom_collate_fn
 def build_train(data_config, tasks, logger):
     # Randomly sample a task
     task_name = random.choice(list(tasks['train'].keys()))
-    task = tasks[task_name]
+    task = tasks['train'][task_name]
     logger.info('Task {} is chosen'.format(task_name))
 
     # Randomly split the task into context and target sets
     max_samples = data_config['max_samples']
-    context_ratio_range = data_config.get(['context_ratio_range'], [0.05, 0.95])
+    context_ratio_range = data_config.get('context_ratio_range', [0.05, 0.95])
     context_split = random.uniform(*context_ratio_range)
     context_size = floor(context_split * len(task))
     target_size = len(task) - context_size
@@ -24,9 +24,9 @@ def build_train(data_config, tasks, logger):
         target_split_size = ceil(target_size / num_splits)
 
         splits = [context_split_size] * num_splits
-        splits[-1] = splits[-1] - (context_size % num_splits)
+        splits[-1] = splits[-1] - (context_split_size * num_splits - context_size)
         splits = splits + ([target_split_size] * num_splits)
-        splits[-1] = splits[-1] - (target_size % num_splits)
+        splits[-1] = splits[-1] - (target_split_size * num_splits - target_size)
     else:
         num_splits = 1
         splits = [context_size, target_size]
@@ -50,9 +50,8 @@ def build_train(data_config, tasks, logger):
     return dataloaders
 
 def build_test(data_config, tasks, logger):
-    task_name = list(tasks['test'].keys())[0]
-    task = tasks[task_name]
-    logger.info('Test task {} is loaded'.format(task_name))
+    task = tasks['test']
+    logger.info('Test task is loaded')
 
     # Randomly split the task into context and target sets
     context_size = floor(0.3 * len(task))
