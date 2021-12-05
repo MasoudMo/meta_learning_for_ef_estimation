@@ -1,12 +1,19 @@
 model: &model
   checkpoint_path: ''
   x_encoder:
-    name: resnet2plus1d
-    dim: 128
-    num_layers: 2
+    name: customcnn3d
+    input_dim: 128
+    n_conv_layers: 3
+    out_channels: [10, 60, 128]
+    kernel_sizes: 3
+    pool_sizes: 2
+    output_dim: 128
+    cnn_dropout_p: 0
+    fc_dropout_p: 0
 
   xy_encoder:
     num_layers: 2
+    hidden_size: 256
 
   decoder:
     name: mlp
@@ -27,7 +34,7 @@ train: &train
 
   optimizer: &optimizer
     name: sgd
-    lr: 0.3
+    lr: 0.01
     momentum: 0.9
     nesterov: False
     weight_decay: 0.0001
@@ -39,7 +46,8 @@ train: &train
 
 
 eval: &eval
-  standard: loss
+  standards: [r2, mae]
+  standard: r2
 
 
 data: &data
@@ -49,13 +57,13 @@ data: &data
   context_ratio_range: [0.05, 0.95]
 
   task1:
-    name: 'campus'
+    name: 'camus'
     task: 'high_risk_ef'
     view: 'ap2'
     image_shape: 128
 
   task2:
-    name: 'campus'
+    name: 'camus'
     task: 'high_risk_ef'
     view: 'ap4'
     image_shape: 128
