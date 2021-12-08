@@ -59,7 +59,8 @@ class CustomCheckpointer(object):
             model_params['x_encoder_state_dict'] = self.model['x_encoder'].module.state_dict()
             model_params['np_state_dict'] = self.model['np'].module.state_dict()
         else:
-            model_params['state_dict'] = self.model.state_dict()
+            model_params['x_encoder_state_dict'] = self.model['x_encoder'].state_dict()
+            model_params['np_state_dict'] = self.model['np'].state_dict()
 
         model_params['optimizer_state_dict'] = self.optimizer.state_dict()
         model_params['scheduler_state_dict'] = self.scheduler.state_dict()
