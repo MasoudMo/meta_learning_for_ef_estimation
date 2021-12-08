@@ -103,11 +103,11 @@ class CustomCheckpointer(object):
         self.logger.info("Loading checkpoint from {}".format(checkpoint_path))
         checkpoint_dict = self._load_checkpoint(checkpoint_path)
 
-        self.model['x_encoder'].load_state_dict(
-            checkpoint_dict.pop('x_encoder_state_dict'), strict=strict)
-
-        self.model['np'].load_state_dict(
-            checkpoint_dict.pop('np_state_dict'), strict=strict)
+        if type(self.model) is dict:
+            for model_name in self.model.keys():
+                self.model[model_name].load_state_dict(checkpoint_dict.pop(model_name + '_state_dict'), strict=strict)
+        else:
+            self.model.load_state_dict(checkpoint_dict.pop('state_dict'), strict=strict)
 
         if strict:
             if 'optimizer_state_dict' in checkpoint_dict and self.optimizer:
