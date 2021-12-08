@@ -2,13 +2,14 @@ import re
 import os
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-from torchvision.transforms import Compose, ToTensor, Normalize
+from torchvision.transforms import Compose, ToTensor, Normalize, Resize
 import SimpleITK as sitk
 import cv2
 import torch
 from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
 from scipy.io import loadmat
+from math import ceil, isnan
 
 
 def custom_collate_fn(batch):
@@ -120,7 +121,8 @@ class CamusEfDataset(Dataset):
     def __init__(self,
                  datasets_root_path,
                  image_shape,
-                 device=None,
+                 num_frames,
+                 device=torch.device('cpu'),
                  task='all_ef',
                  view='all_views'):
         """
@@ -130,8 +132,8 @@ class CamusEfDataset(Dataset):
         ----------
         datasets_root_path (str): Path to directory containing all datasets
         image_shape (int): Shape to resize images to
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit).
         device (torch device): device to move data to
-        num_frames (int): Number of frames to use for each video (If video is shorter than this replica
         task (str): task to create the dataset for (must be one of
                     [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv, quality])
         view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
@@ -190,11 +192,11 @@ class CamusEfDataset(Dataset):
 
                 if task == 'quality':
                     if match == 'Good':
-                        match = 0
+                        match = 100
                     if match == 'Medium':
-                        match = 1
+                        match = 50
                     elif match == 'Poor':
-                        match = 2
+                        match = 25
                 else:
                     match = float(label_pattern.findall(label_str)[0][1])
 
@@ -217,13 +219,12 @@ class CamusEfDataset(Dataset):
 
         # Normalization operation
         self.trans = Compose([ToTensor(),
-                              Normalize((0.5), (0.5))])
-
-        self.image_shape = image_shape
-
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
         # Other attributes
         self.device = device
         self.task = task
+        self.num_frames = num_frames
 
     def __getitem__(self, idx):
         """
@@ -239,14 +240,18 @@ class CamusEfDataset(Dataset):
         """
 
         # Get the label
-        if self.task == 'quality':
-            label = torch.tensor(self.labels[idx], dtype=torch.long)
-        else:
-            label = torch.tensor(self.labels[idx], dtype=torch.float32)
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
 
         # extract video
-        cine_vid = self.process_cine(sitk.ReadImage(self.patient_data_dirs[idx]), size=self.image_shape)
+        cine_vid = np.moveaxis(sitk.GetArrayFromImage(sitk.ReadImage(self.patient_data_dirs[idx])), 0, -1)
         cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
+
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
 
         # Move to correct device
         cine_vid = cine_vid.to(self.device)
@@ -265,27 +270,6 @@ class CamusEfDataset(Dataset):
 
         return self.num_samples
 
-    @staticmethod
-    def process_cine(cine_vid, size=128):
-        """
-        Processes echo video
-
-        Parameters
-        ----------
-        cine_vid (SITK Image): Set of images to rescale
-        size (int): The size of output images
-
-        Returns
-        -------
-            (numpy array): Processed cine video
-        """
-
-        processed_vid = sitk.GetArrayFromImage(cine_vid)
-        processed_vid = np.moveaxis(processed_vid, 0, -1)
-        processed_vid = cv2.resize(processed_vid, (size, size))
-
-        return processed_vid
-
 
 class EchoNetEfDataset(Dataset):
     """
@@ -294,21 +278,23 @@ class EchoNetEfDataset(Dataset):
 
     def __init__(self,
                  datasets_root_path,
-                 device=None,
-                 max_frames=250,
-                 nth_frame=1,
-                 task='all_ef'):
+                 image_shape,
+                 num_frames,
+                 device=torch.device('cpu'),
+                 task='all_ef',
+                 view='ap4'):
         """
         Constructor for the EchoNet EF dataset dataset class
 
         Parameters
         ----------
-        datasets_root_path (str): Path to directory containing data
+        datasets_root_path (str): Path to directory containing all datasets
+        image_shape (int): Shape to resize images to
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit).
         device (torch device): device to move data to
-        max_frames (int): Max number of frames to use for each video (If video is shorter than this replicate it to fit)
-        nth_frame (int): Only extract every nth frame
         task (str): task to create the dataset for (must be one of
                     [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
+        view (str): video view to make the dataset for (must be one of [ap4])
         """
 
         super().__init__()
@@ -323,6 +309,7 @@ class EchoNetEfDataset(Dataset):
                         'normal_ef',
                         'esv',
                         'edv'], 'Specified task is not supported'
+        assert view in ['ap4'], 'Specified view is not supported'
 
         # CSV file containing file names and labels
         filelist_df = pd.read_csv(os.path.join(dataset_path, 'FileList.csv'))
@@ -354,12 +341,12 @@ class EchoNetEfDataset(Dataset):
 
         # Normalization operation
         self.trans = Compose([ToTensor(),
-                              Normalize((0.5), (0.5))])
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
 
         # Other attributes
         self.device = device
-        self.max_frames = max_frames
-        self.nth_frame = nth_frame
+        self.num_frames = num_frames
 
     def __getitem__(self, idx):
         """
@@ -380,14 +367,15 @@ class EchoNetEfDataset(Dataset):
         # Get the video
         cine_vid = self.loadvideo(self.patient_data_dirs[idx])
 
-        # Extract nth frames
-        cine_vid = cine_vid[0::self.nth_frame]
-
-        # clip if longer than max_frames
-        if cine_vid.shape[2] > self.max_frames:
-            cine_vid = cine_vid[:, :, :self.max_frames]
-
+        # Transform video
         cine_vid = self.trans(cine_vid).unsqueeze(1)
+
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
 
         # Move to correct device
         cine_vid = cine_vid.to(self.device)
@@ -439,7 +427,7 @@ class EchoNetEfDataset(Dataset):
             v[:, :, count] = frame
 
         return v
-
+    
 
 class LVBiplaneEFDataset(Dataset):
     """
@@ -449,7 +437,8 @@ class LVBiplaneEFDataset(Dataset):
     def __init__(self,
                  datasets_root_path,
                  image_shape,
-                 device=None,
+                 num_frames,
+                 device=torch.device('cpu'),
                  raw_data_summary_csv='Biplane_LVEF_DataSummary.csv',
                  task='all_ef',
                  view='all_views'):
@@ -462,9 +451,9 @@ class LVBiplaneEFDataset(Dataset):
         image_shape (int): Shape to resize images to
         device (torch device): device to move data to
         raw_data_summary_csv (str): CSV file containing data information
-        num_frames (int): Number of frames to use for each video (If video is shorter than this replica
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit).
         task (str): task to create the dataset for (must be one of
-                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv, quality])
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, esv, edv])
         view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
         """
 
@@ -553,12 +542,13 @@ class LVBiplaneEFDataset(Dataset):
 
         # Normalization operation
         self.trans = Compose([ToTensor(),
-                              Normalize((0.5), (0.5))])
-        self.image_shape = image_shape
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
 
         # Other attributes
         self.device = device
         self.task = task
+        self.num_frames = num_frames
 
     def __getitem__(self, idx):
         """
@@ -580,6 +570,13 @@ class LVBiplaneEFDataset(Dataset):
         cine_vid = loadmat(self.patient_data_dirs[idx], simplify_cells=True)['resized']
         cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
 
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
+
         # Move to correct device
         cine_vid = cine_vid.to(self.device)
         label = label.to(self.device)
@@ -598,18 +595,383 @@ class LVBiplaneEFDataset(Dataset):
         return self.num_samples
 
 
-if __name__ == '__main__':
+class DelEfDataset(Dataset):
+    """
+    Dataset class for the internal Del LVEF dataset
+    """
 
-    # Example code on usage of datasets
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    def __init__(self,
+                 datasets_root_path,
+                 image_shape,
+                 num_frames,
+                 device=torch.device('cpu'),
+                 task='all_ef',
+                 view='all_views'):
+        """
+        Constructor for the Del LVEF dataset class
 
-    dataset = EchoNetEfDataset(dataset_path='D:/Workspace/RCL/datasets/raw/EchoNet-Dynamic/EchoNet-Dynamic',
-                               device=None,
-                               max_frames=250,
-                               nth_frame=1,
-                               task='high_risk_ef')
+        Parameters
+        ----------
+        datasets_root_path (str): Path to directory containing all datasets
+        image_shape (int): Shape to resize images to
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit).
+        device (torch device): device to move data to
+        task (str): task to create the dataset for (must be one of
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef])
+        view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
+        """
 
-    dataloader = DataLoader(dataset, batch_size=3, shuffle=False, drop_last=True, collate_fn=custom_collate_fn)
+        super().__init__()
 
-    for data, label in dataloader:
-        print(label)
+        dataset_path = os.path.join(datasets_root_path, 'del_lvef')
+
+        # Input checks
+        assert task in ['all_ef',
+                        'high_risk_ef',
+                        'medium_ef_risk',
+                        'slight_ef_risk',
+                        'normal_ef'], 'Specified task is not supported'
+        assert view in ['all_views',
+                        'ap2',
+                        'ap4'], 'Specified view is not supported'
+
+        # Obtain path to data .mat files based on what view is needed
+        mat_paths = list()
+        if view == 'ap2' or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP2'))
+            temp_paths = [os.path.join(dataset_path, 'AP2', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        if view == 'ap4'or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP4'))
+            temp_paths = [os.path.join(dataset_path, 'AP4', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        # Initialize variables
+        self.labels = list()
+        self.patient_data_dirs = list()
+
+        # Go through each mat file and obtain EF value
+        for mat_path in mat_paths:
+
+            # Extract EF label
+            label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+
+            # Add sample if it's for the correct task
+            add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                           labels=self.labels,
+                                           label_to_add=label,
+                                           path_to_add=mat_path,
+                                           task=task)
+
+        # Extract the number of available data
+        self.num_samples = len(self.patient_data_dirs)
+
+        # Normalization operation
+        self.trans = Compose([ToTensor(),
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
+
+        # Other attributes
+        self.device = device
+        self.task = task
+        self.num_frames = num_frames
+
+    def __getitem__(self, idx):
+        """
+        Get the sample video and label at idx
+        Parameters
+        ----------
+        idx (int): Index to fetch data for
+        Returns
+        -------
+        (Torch tensors) for video and corresponding label
+        """
+
+        # Get the label
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
+        # extract video
+        cine_vid = loadmat(self.patient_data_dirs[idx], simplify_cells=True)['resized']
+        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
+
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
+
+        # Move to correct device
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
+
+        return cine_vid, label
+
+    def __len__(self):
+        """
+        Provides length of the dataset
+        Returns
+        -------
+            (int): Indicates the number of available samples for the task
+        """
+
+        return self.num_samples
+
+
+class NatEfDataset(Dataset):
+    """
+    Dataset class for the internal Nat LVEF dataset
+    """
+
+    def __init__(self,
+                 datasets_root_path,
+                 image_shape,
+                 num_frames,
+                 device=torch.device('cpu'),
+                 task='all_ef',
+                 view='all_views'):
+        """
+        Constructor for the Nat LVEF dataset class
+
+        Parameters
+        ----------
+        datasets_root_path (str): Path to directory containing all datasets
+        image_shape (int): Shape to resize images to
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit)
+        device (torch device): device to move data to
+        task (str): task to create the dataset for (must be one of
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, quality])
+        view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
+        """
+
+        super().__init__()
+
+        dataset_path = os.path.join(datasets_root_path, 'nat_lvef')
+
+        # Input checks
+        assert task in ['all_ef',
+                        'high_risk_ef',
+                        'medium_ef_risk',
+                        'slight_ef_risk',
+                        'normal_ef',
+                        'quality'], 'Specified task is not supported'
+        assert view in ['all_views',
+                        'ap2',
+                        'ap4'], 'Specified view is not supported'
+
+        # Obtain path to data .mat files based on what view is needed
+        mat_paths = list()
+        if view == 'ap2' or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP2'))
+            temp_paths = [os.path.join(dataset_path, 'AP2', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        if view == 'ap4' or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP4'))
+            temp_paths = [os.path.join(dataset_path, 'AP4', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        # Initialize variables
+        self.labels = list()
+        self.patient_data_dirs = list()
+
+        # Go through each mat file and obtain EF value
+        for mat_path in mat_paths:
+
+            # Extract EF label
+            if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+            else:
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32)
+
+            if label != -1 and label != 0:
+                # Add sample if it's for the correct task
+                add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                               labels=self.labels,
+                                               label_to_add=label,
+                                               path_to_add=mat_path,
+                                               task=task)
+
+        # Extract the number of available data
+        self.num_samples = len(self.patient_data_dirs)
+
+        # Normalization operation
+        self.trans = Compose([ToTensor(),
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
+
+        # Other attributes
+        self.device = device
+        self.task = task
+        self.num_frames = num_frames
+
+    def __getitem__(self, idx):
+        """
+        Get the sample video and label at idx
+        Parameters
+        ----------
+        idx (int): Index to fetch data for
+        Returns
+        -------
+        (Torch tensors) for video and corresponding label
+        """
+
+        # Get the label
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
+        # extract video
+        cine_vid = loadmat(self.patient_data_dirs[idx], simplify_cells=True)['resized']
+        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
+
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
+
+        # Move to correct device
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
+
+        return cine_vid, label
+
+    def __len__(self):
+        """
+        Provides length of the dataset
+        Returns
+        -------
+            (int): Indicates the number of available samples for the task
+        """
+
+        return self.num_samples
+
+
+class PocEfDataset(Dataset):
+    """
+    Dataset class for the internal Poc LVEF dataset
+    """
+
+    def __init__(self,
+                 datasets_root_path,
+                 image_shape,
+                 num_frames,
+                 device=torch.device('cpu'),
+                 task='all_ef',
+                 view='all_views'):
+        """
+        Constructor for the Nat Poc dataset class
+        Parameters
+        ----------
+        datasets_root_path (str): Path to directory containing all datasets
+        image_shape (int): Shape to resize images to
+        num_frames (int): number of frames to use for each video (If video is shorter than this replicate it to fit)
+        device (torch device): device to move data to
+        task (str): task to create the dataset for (must be one of
+                    [all_ef, high_risk_ef, medium_ef_risk, slight_ef_risk, normal_ef, quality])
+        view (str): video view to make the dataset for (must be one of [all_views, ap2, ap4])
+        """
+
+        super().__init__()
+
+        dataset_path = os.path.join(datasets_root_path, 'poc_lvef')
+
+        # Input checks
+        assert task in ['all_ef',
+                        'high_risk_ef',
+                        'medium_ef_risk',
+                        'slight_ef_risk',
+                        'normal_ef',
+                        'quality'], 'Specified task is not supported'
+        assert view in ['all_views',
+                        'ap2',
+                        'ap4'], 'Specified view is not supported'
+
+        # Obtain path to data .mat files based on what view is needed
+        mat_paths = list()
+        if view == 'ap2' or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP2'))
+            temp_paths = [os.path.join(dataset_path, 'AP2', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        if view == 'ap4'or view == 'all_views':
+            temp_paths = os.listdir(os.path.join(dataset_path, 'AP4'))
+            temp_paths = [os.path.join(dataset_path, 'AP4', mat_path) for mat_path in temp_paths]
+            mat_paths += temp_paths
+
+        # Initialize variables
+        self.labels = list()
+        self.patient_data_dirs = list()
+
+        # Go through each mat file and obtain EF value
+        for mat_path in mat_paths:
+
+            # Extract EF label
+            if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+            else:
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32)
+
+            if not isnan(label) and label != 0 and label != -1:
+                # Add sample if it's for the correct task
+                add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
+                                               labels=self.labels,
+                                               label_to_add=label,
+                                               path_to_add=mat_path,
+                                               task=task)
+
+        # Extract the number of available data
+        self.num_samples = len(self.patient_data_dirs)
+
+        # Normalization operation
+        self.trans = Compose([ToTensor(),
+                              Normalize((0.5), (0.5)),
+                              Resize((image_shape, image_shape))])
+
+        # Other attributes
+        self.device = device
+        self.task = task
+        self.num_frames = num_frames
+
+    def __getitem__(self, idx):
+        """
+        Get the sample video and label at idx
+        Parameters
+        ----------
+        idx (int): Index to fetch data for
+        Returns
+        -------
+        (Torch tensors) for video and corresponding label
+        """
+
+        # Get the label
+        label = torch.tensor(self.labels[idx], dtype=torch.float32)
+
+        # extract video
+        cine_vid = loadmat(self.patient_data_dirs[idx], simplify_cells=True)['resized']
+        cine_vid = self.trans(np.array(cine_vid, dtype=np.uint8)).unsqueeze(1)
+
+        # Limit the number of frames if needed
+        if cine_vid.shape[0] > self.num_frames:
+            cine_vid = cine_vid[:self.num_frames]
+        else:
+            cine_vid = cine_vid.repeat(ceil(self.num_frames / cine_vid.shape[0]), 1, 1, 1)
+            cine_vid = cine_vid[:self.num_frames]
+
+        # Move to correct device
+        cine_vid = cine_vid.to(self.device)
+        label = label.to(self.device)
+
+        return cine_vid, label
+
+    def __len__(self):
+        """
+        Provides length of the dataset
+        Returns
+        -------
+            (int): Indicates the number of available samples for the task
+        """
+
+        return self.num_samples
+

@@ -37,7 +37,7 @@ class BaseEngine(object):
         if device == 'cpu':
             self.logger.warn('GPU is not available')
         else:
-            self.logger.warn('{} GPUs are ready to be used'.format(self.num_devices))
+            self.logger.warn('{} GPU/s are ready to be used'.format(self.num_devices))
 
         self.save_dir = save_dir
 
@@ -57,7 +57,7 @@ class Engine(BaseEngine):
     def _build(self, mode, init=False):
         # Build tasks
         self.tasks = task_builder.build(
-            self.data_config, self.logger)
+            self.data_config, self.logger, self.device)
 
         # Build a model
         self.models = model_builder.build(
@@ -74,7 +74,7 @@ class Engine(BaseEngine):
         self.loss_meter = meter_builder.build(
             self.model_config, self.logger)
         self.evaluators = evaluator_builder.build(
-            self.eval_config, self.logger)
+            self.eval_config, self.logger, self.device)
 
         # Build a checkpointer
         self.checkpointer = checkpointer_builder.build(
@@ -152,6 +152,7 @@ class Engine(BaseEngine):
 
             # Compute the NPML objective
             loss = self.criterion(output, target_label)
+            self.loss_meter.update(loss.detach().item())
 
             # Back propagate
             loss.backward()
@@ -166,57 +167,60 @@ class Engine(BaseEngine):
         return
 
     def _evaluate_once(self, epoch):
-        util.to_eval(self.models)
-        dataloader = dataloader_builder.build_test(
-            self.data_config, self.tasks, self.logger)
-        context_dataloader, target_dataloader =\
-            dataloader['context'], dataloader['target']
+        with torch.no_grad():
+            util.to_eval(self.models)
+            dataloader = dataloader_builder.build_test(
+                self.data_config, self.tasks, self.logger)
+            context_dataloader, target_dataloader =\
+                dataloader['context'], dataloader['target']
 
-        context_inputs, context_labels, target_inputs, target_labels = [], [], [], []
-        for (context_input, context_label), (target_input, target_label) in zip(
-            context_dataloader, target_dataloader):
-            context_input, context_label =\
-                    context_input.to(self.device), context_label.to(self.device)
-            target_input, target_label =\
-                    target_input.to(self.device), target_label.to(self.device)
+            # Process the context set as a whole (It should all be loaded onto memory)
+            context_inputs, context_labels = [], []
+            for (context_input, context_label) in context_dataloader:
+                context_input, context_label =\
+                        context_input.to(self.device), context_label.to(self.device)
 
-        context_inputs.append(self.models['x_encoder'](context_input))
-        context_labels.append(context_label)
-        target_inputs.append(self.models['x_encoder'](target_input))
-        target_labels.append(target_label)
+                context_inputs.append(self.models['x_encoder'](context_input))
+                context_labels.append(context_label)
+            context_inputs = torch.stack(context_inputs).permute(1, 0, 2)
+            context_labels = torch.stack(context_labels).unsqueeze(0)
 
-        context_inputs = torch.stack(context_inputs)
-        context_labels = torch.stack(context_labels).unsqueeze(0).permute(0, 2, 1)
-        target_inputs = torch.stack(target_inputs)
-        target_labels = torch.stack(target_labels).unsqueeze(0).permute(0, 2, 1)
-        output = self.models['np'](
-            context_inputs, context_labels, target_inputs, target_labels)
+            # Now go through batches of test set and compute the losses
+            loss = 0
+            num_batches = 0
+            for (target_input, target_label) in target_dataloader:
+                target_input, target_label =\
+                        target_input.to(self.device), target_label.to(self.device)
 
-        # Run the LNP model
-        output = self.models['np'](
-            self.models['x_encoder'](context_input), context_label.unsqueeze(0),
-            self.models['x_encoder'](target_input), target_label.unsqueeze(0))
+                target_input = self.models['x_encoder'](target_input).unsqueeze(0)
+                target_label = target_label.unsqueeze(0).unsqueeze(2)
 
-        # Compute R2 score
-        if 'r2' in self.evaluators:
-            self.evaluators['r2'].update(output, target_label)
+                output = self.models['np'](
+                    context_inputs, context_labels, target_input, target_label)
 
-        # Compute MAE score
-        if 'mae' in self.evaluators:
-            self.evaluators['mae'].update(output, target_label)
+                # Compute R2 score
+                if 'r2' in self.evaluators:
+                    self.evaluators['r2'].update(output, target_label)
 
-        # Compute test loss
-        loss = self.criterion(output, target_label)
+                # Compute MAE score
+                if 'mae' in self.evaluators:
+                    self.evaluators['mae'].update(output, target_label)
 
-        self.logger.info(
-            '[Epoch {}] - NPML test loss: {:4f}'.format(epoch, loss.detach().item()))
+                # Compute test loss
+                loss += self.criterion(output, target_label)
+                num_batches += 1
 
-        for standard in self.evaluators:
-            metric = self.evaluators[standard]
-            self.logger.infov(
-                '[Epoch {}] - NPML {} score: {:4f}'.format(
-                    epoch, metric))
-            self.evaluators[standard].reset()
+            self.logger.info(
+                '[Epoch {}] - NPML test loss: {:4f}'.format(epoch, loss.detach().item()/num_batches))
 
-        return loss
+            eval_metrics = {}
+            for standard in self.evaluators:
+                metric = self.evaluators[standard].compute()
+                eval_metrics[standard] = metric
+                self.logger.infov(
+                    '[Epoch {}] - NPML {} {} score: {:4f}'.format(
+                        epoch, loss.detach().item()/num_batches, standard, metric))
+                self.evaluators[standard].reset()
+
+            return eval_metrics
 

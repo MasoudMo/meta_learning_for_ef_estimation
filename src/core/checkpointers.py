@@ -56,7 +56,8 @@ class CustomCheckpointer(object):
 
         model_params = {'trial': trial, 'epoch': epoch, 'num_steps': num_steps}
         if torch.cuda.device_count() > 1:
-            model_params['state_dict'] = self.model.module.state_dict()
+            model_params['x_encoder_state_dict'] = self.model['x_encoder'].module.state_dict()
+            model_params['np_state_dict'] = self.model['np'].module.state_dict()
         else:
             model_params['state_dict'] = self.model.state_dict()
 
@@ -96,8 +97,11 @@ class CustomCheckpointer(object):
         self.logger.info("Loading checkpoint from {}".format(checkpoint_path))
         checkpoint_dict = self._load_checkpoint(checkpoint_path)
 
-        self.model.load_state_dict(
-            checkpoint_dict.pop('state_dict'), strict=strict)
+        self.model['x_encoder'].load_state_dict(
+            checkpoint_dict.pop('x_encoder_state_dict'), strict=strict)
+
+        self.model['np'].load_state_dict(
+            checkpoint_dict.pop('np_state_dict'), strict=strict)
 
         if strict:
             if 'optimizer_state_dict' in checkpoint_dict and self.optimizer:

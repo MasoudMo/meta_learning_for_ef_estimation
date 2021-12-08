@@ -11,7 +11,8 @@ ENCODERS = {
 
 
 NP_MODLES = {
-    'lnp': npf.LNP
+    'lnp': npf.LNP,
+    'attnlnp': npf.AttnLNP
 }
 
 def build(model_config, logger):
@@ -24,18 +25,19 @@ def build(model_config, logger):
     xy_encoder_config = model_config['xy_encoder']
     xy_encoder_num_layers = xy_encoder_config['num_layers']
     xy_encoder = merge_flat_input(partial(
-        MLP, n_hidden_layers=xy_encoder_num_layers, hidden_size=xy_encoder_config['hidden_size']), is_sum_merge=True)
+        MLP, n_hidden_layers=xy_encoder_num_layers, hidden_size=xy_encoder_config['hidden_dim']), is_sum_merge=True)
 
     # Build a decoder
     decoder_config = deepcopy(model_config['decoder'])
     decoder_num_layers = decoder_config['num_layers']
+    decoder_hidden_dim = decoder_config['hidden_dim']
 
     # Build a NP model
     np_config = deepcopy(model_config['np'])
-    np_model_name = np_config.pop('name', 'nlp')
+    np_model_name = np_config.pop('name', 'lnp')
 
     decoder = merge_flat_input(
-        partial(MLP, n_hidden_layers=decoder_num_layers), is_sum_merge=True)
+        partial(MLP, n_hidden_layers=decoder_num_layers, hidden_size=decoder_hidden_dim), is_sum_merge=True)
     model = NP_MODLES[np_model_name](
         XYEncoder=xy_encoder, Decoder=decoder, **np_config)
 

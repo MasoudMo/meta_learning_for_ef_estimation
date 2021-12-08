@@ -4,8 +4,9 @@ from sklearn.metrics import r2_score
 
 class Evaluator(object):
 
-    def __init__(self, logger):
+    def __init__(self, logger, device):
         self.logger = logger
+        self.device = device
         self.reset()
 
     def reset(self):
@@ -29,7 +30,7 @@ class R2Evaluator(Evaluator):
         self.y_true = np.array([])
 
     def update(self, y_pred, y_true):
-        y_pred = y_pred[0].mean(dim=0).detach().cpu().numpy()
+        y_pred = y_pred[0].mean.squeeze().mean(dim=0).detach().cpu().numpy()
         self.y_pred = np.concatenate((self.y_pred, y_pred), axis=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze().detach().cpu().numpy()
@@ -43,18 +44,18 @@ class MaeEvaluator(Evaluator):
 
     def reset(self):
         self.mae_score = 0.
-        self.y_pred = torch.tensor([])
-        self.y_true = torch.tensor([])
+        self.y_pred = torch.tensor([], device=self.device)
+        self.y_true = torch.tensor([], device=self.device)
 
     def update(self, y_pred, y_true):
-        y_pred = y_pred[0].mean(dim=0)
+        y_pred = y_pred[0].mean.squeeze().mean(dim=0)
         self.y_pred = torch.cat((self.y_pred, y_pred), dim=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze()
         self.y_true = torch.cat((self.y_true, y_true), dim=0) if self.y_true.size else y_true
 
     def compute(self):
-        self.mae_scoe = torch.nn.functional.l1_loss(y_true=self.y_true, y_pred=self.y_pred)
+        self.mae_scoe = torch.nn.functional.l1_loss(self.y_pred, self.y_true)
         return self.mae_scoe.item()
 
 

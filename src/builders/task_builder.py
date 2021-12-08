@@ -4,26 +4,39 @@ from src.core import datasets
 
 DATASETS = {
     'camus': datasets.CamusEfDataset,
-    'echo': datasets.EchoNetEfDataset,
+    'echonet': datasets.EchoNetEfDataset,
+    'biplane_lvef': datasets.LVBiplaneEFDataset,
+    'nat_lvef': datasets.NatEfDataset,
+    'del_lvef': datasets.DelEfDataset,
+    'poc_lvef': datasets.PocEfDataset
 }
 
-def build(data_config, logger):
+def build(data_config, logger, device):
     root = data_config['root']
-    image_shape = 128 # default image_shape
 
     tasks = {'train': {}, 'test': {}}
-    task_tmp_names = [key for key in data_config.keys() if 'task' in key]
-    for task_tmp_name in task_tmp_names:
-        task_config = deepcopy(data_config[task_tmp_name])
+    dataset_tmp_names = [key for key in data_config.keys() if 'dataset' in key]
+    for dataset_tmp_name in dataset_tmp_names:
+        task_config = deepcopy(data_config[dataset_tmp_name])
         data_name = task_config.pop('name')
         task_config['datasets_root_path'] = root
 
-        task_name = '_'.join([data_name, task_config['task'], task_config['view']])
-        tasks['train'][task_name] = DATASETS[data_name](**task_config)
-        image_shape = task_config['image_shape'] # store it for the test set
+        for view in task_config['view']:
+            for label_type in task_config['task']:
+                task_name = '_'.join([data_name, label_type, view])
+                tasks['train'][task_name] = DATASETS[data_name](**dict(task_config,
+                                                                       view=view,
+                                                                       task=label_type,
+                                                                       device=device))
 
-    tasks['test'] = DATASETS['camus'](image_shape=image_shape, task='all_ef',
-                                      view='all_views', datasets_root_path=root)
+    # Load the validation dataset
+    task_config = deepcopy(data_config['valset'])
+    tasks['test'] = DATASETS[task_config['name']](image_shape=task_config['image_shape'],
+                                                  num_frames=task_config['num_frames'],
+                                                  device=device,
+                                                  task='all_ef',
+                                                  view='ap4',
+                                                  datasets_root_path=root)
     logger.infov(
         'Tasks are built - {}'.format(tasks))
     return tasks

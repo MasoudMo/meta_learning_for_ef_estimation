@@ -18,25 +18,24 @@ model: &model
   decoder:
     name: mlp
     num_layers: 4
+    hidden_dim: 128
 
   np:
-    name: lnp
+    name: attnlnp
     x_dim: 128
     y_dim: 1
     is_q_zCct: False
     n_z_samples_train: 1
     n_z_samples_test: 32
-    encoded_path: 'latent'
+#    encoded_path: 'latent' Only use for LNP
 
 
 train: &train
   num_epochs: 100
 
   optimizer: &optimizer
-    name: sgd
-    lr: 0.01
-    momentum: 0.9
-    nesterov: False
+    name: adam
+    lr: 0.00001
     weight_decay: 0.0001
 
   lr_schedule: &lr_schedule
@@ -56,16 +55,42 @@ data: &data
   max_samples: 10
   context_ratio_range: [0.05, 0.95]
 
-  task1:
+  dataset1:
     name: 'camus'
-    task: 'high_risk_ef'
-    view: 'ap2'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv', 'quality']
+    view: ['ap2' , 'ap4']
     image_shape: 128
+    num_frames: 32
 
-  task2:
-    name: 'camus'
-    task: 'high_risk_ef'
-    view: 'ap4'
+  dataset2:
+    name: 'biplane_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv']
+    view: ['ap2', 'ap4']
     image_shape: 128
+    num_frames: 32
 
+  dataset3:
+    name: 'del_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
 
+  dataset4:
+    name: 'nat_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  dataset5:
+    name: 'poc_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  valset:
+    name: 'echonet'
+    image_shape: 128
+    num_frames: 32

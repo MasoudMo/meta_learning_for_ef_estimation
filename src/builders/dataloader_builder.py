@@ -2,6 +2,7 @@ import random
 from math import floor, ceil
 from torch.utils.data import random_split, DataLoader
 from src.core.datasets import custom_collate_fn
+import numpy as np
 
 
 def build_train(data_config, tasks, logger):
@@ -20,13 +21,22 @@ def build_train(data_config, tasks, logger):
     if context_size > max_samples or target_size > max_samples:
         num_splits = ceil(max(context_size, target_size) / max_samples)
 
-        context_split_size = ceil(context_size / num_splits)
-        target_split_size = ceil(target_size / num_splits)
+        context_split_size = floor(context_size / num_splits)
+        target_split_size = floor(target_size / num_splits)
 
-        splits = [context_split_size] * num_splits
-        splits[-1] = splits[-1] - (context_split_size * num_splits - context_size)
-        splits = splits + ([target_split_size] * num_splits)
-        splits[-1] = splits[-1] - (target_split_size * num_splits - target_size)
+        context_splits = np.array([context_split_size] * num_splits, dtype=np.int)
+        offset = np.zeros(num_splits, dtype=np.int)
+        offset[0:int(context_size - context_split_size * num_splits)] = 1
+        context_splits = context_splits + offset
+        context_splits = context_splits.tolist()
+
+        target_splits = np.array([target_split_size] * num_splits, dtype=np.int)
+        offset = np.zeros(num_splits, dtype=np.int)
+        offset[0:int(target_size - target_split_size * num_splits)] = 1
+        target_splits = target_splits + offset
+        target_splits = target_splits.tolist()
+
+        splits = context_splits + target_splits
     else:
         num_splits = 1
         splits = [context_size, target_size]
@@ -50,11 +60,12 @@ def build_train(data_config, tasks, logger):
     return dataloaders
 
 def build_test(data_config, tasks, logger):
+    max_samples = data_config['max_samples']
     task = tasks['test']
     logger.info('Test task is loaded')
 
     # Randomly split the task into context and target sets
-    context_size = floor(0.3 * len(task))
+    context_size = floor(0.001 * len(task))
     target_size = len(task) - context_size
 
     context_dataset, target_dataset = random_split(task, [context_size, target_size])
@@ -63,7 +74,7 @@ def build_test(data_config, tasks, logger):
     context_dataloader = DataLoader(
         context_dataset, batch_size=1, collate_fn=custom_collate_fn)
     target_dataloader = DataLoader(
-        target_dataset, batch_size=1, collate_fn=custom_collate_fn)
+        target_dataset, batch_size=max_samples, collate_fn=custom_collate_fn)
 
     dataloaders = {
         'context': context_dataloader,
