@@ -13,7 +13,7 @@ model: &model
 
   xy_encoder:
     num_layers: 2
-    hidden_size: 256
+    hidden_dim: 256
 
   decoder:
     name: mlp
@@ -53,7 +53,11 @@ data: &data
   root: 'data'
   num_workers: 8
   max_samples: 10
-  context_ratio_range: [0.05, 0.95]
+  context_ratio_range: [0.2, 0.8]
+  tasks_to_exclude: ['nat_lvef_medium_ef_risk_ap4',
+                     'nat_lvef_medium_ef_risk_ap2',
+                     'del_lvef_medium_ef_risk_ap4',
+                     'del_lvef_medium_ef_risk_ap2']
 
   dataset1:
     name: 'camus'

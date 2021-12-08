@@ -24,10 +24,11 @@ def build(data_config, logger, device):
         for view in task_config['view']:
             for label_type in task_config['task']:
                 task_name = '_'.join([data_name, label_type, view])
-                tasks['train'][task_name] = DATASETS[data_name](**dict(task_config,
-                                                                       view=view,
-                                                                       task=label_type,
-                                                                       device=device))
+                if task_name not in data_config['tasks_to_exclude']:
+                    tasks['train'][task_name] = DATASETS[data_name](**dict(task_config,
+                                                                           view=view,
+                                                                           task=label_type,
+                                                                           device=device))
 
     # Load the validation dataset
     task_config = deepcopy(data_config['valset'])
