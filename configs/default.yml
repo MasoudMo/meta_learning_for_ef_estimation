@@ -1,0 +1,100 @@
+model: &model
+  checkpoint_path: ''
+  x_encoder:
+    name: customcnn3d
+    input_dim: 128
+    n_conv_layers: 3
+    out_channels: [10, 60, 128]
+    kernel_sizes: 3
+    pool_sizes: 2
+    output_dim: 128
+    cnn_dropout_p: 0
+    fc_dropout_p: 0
+
+  xy_encoder:
+    num_layers: 2
+    hidden_dim: 256
+
+  decoder:
+    name: mlp
+    num_layers: 4
+    hidden_dim: 128
+
+  np:
+    name: attnlnp
+    x_dim: 128
+    y_dim: 1
+    is_q_zCct: False
+    n_z_samples_train: 1
+    n_z_samples_test: 32
+#    encoded_path: 'latent' Only use for LNP
+
+
+train: &train
+  num_epochs: 100
+
+  optimizer: &optimizer
+    name: adam
+    lr: 0.00001
+    weight_decay: 0.0001
+
+  lr_schedule: &lr_schedule
+    name: custom
+    milestones: [40, 80]
+    gamma: 0.2
+
+
+eval: &eval
+  standards: [r2, mae]
+  standard: r2
+
+
+data: &data
+  root: 'data'
+  num_workers: 8
+  max_samples: 10
+  context_ratio_range: [0.2, 0.8]
+  tasks_to_exclude: ['nat_lvef_medium_ef_risk_ap4',
+                     'nat_lvef_medium_ef_risk_ap2',
+                     'del_lvef_medium_ef_risk_ap4',
+                     'del_lvef_medium_ef_risk_ap2']
+
+  dataset1:
+    name: 'camus'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv', 'quality']
+    view: ['ap2' , 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  dataset2:
+    name: 'biplane_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'esv', 'edv']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  dataset3:
+    name: 'del_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  dataset4:
+    name: 'nat_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  dataset5:
+    name: 'poc_lvef'
+    task: ['high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef', 'quality']
+    view: ['ap2', 'ap4']
+    image_shape: 128
+    num_frames: 32
+
+  valset:
+    name: 'echonet'
+    image_shape: 128
+    num_frames: 32
