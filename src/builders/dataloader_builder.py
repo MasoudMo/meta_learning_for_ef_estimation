@@ -65,7 +65,7 @@ def build_test(data_config, tasks, logger):
     logger.info('Test task is loaded')
 
     # Randomly split the task into context and target sets
-    context_size = floor(0.001 * len(task))
+    context_size = floor(0.2 * len(task))
     target_size = len(task) - context_size
 
     context_dataset, target_dataset = random_split(task, [context_size, target_size])
