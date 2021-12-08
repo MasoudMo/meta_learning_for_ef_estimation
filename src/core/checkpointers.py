@@ -55,12 +55,17 @@ class CustomCheckpointer(object):
             checkpoint_path = os.path.join(self.checkpoint_dir, 'checkpoint_best.pth'.format(trial))
 
         model_params = {'trial': trial, 'epoch': epoch, 'num_steps': num_steps}
-        if torch.cuda.device_count() > 1:
-            model_params['x_encoder_state_dict'] = self.model['x_encoder'].module.state_dict()
-            model_params['np_state_dict'] = self.model['np'].module.state_dict()
+        if type(self.model) is dict:
+            for model_name in self.model.keys():
+                try:
+                    model_params[model_name + '_state_dict'] = self.model[model_name].module.state_dict()
+                except AttributeError:
+                    model_params[model_name + '_state_dict'] = self.model[model_name].state_dict()
         else:
-            model_params['x_encoder_state_dict'] = self.model['x_encoder'].state_dict()
-            model_params['np_state_dict'] = self.model['np'].state_dict()
+            try:
+                model_params['state_dict'] = self.model.module.state_dict()
+            except AttributeError:
+                model_params['state_dict'] = self.model.state_dict()
 
         model_params['optimizer_state_dict'] = self.optimizer.state_dict()
         model_params['scheduler_state_dict'] = self.scheduler.state_dict()
