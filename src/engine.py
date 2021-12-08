@@ -4,6 +4,7 @@ from src.utils import util
 from src.builders import model_builder, task_builder, dataloader_builder,\
     optimizer_builder, criterion_builder, checkpointer_builder, evaluator_builder,\
     meter_builder, scheduler_builder
+import wandb
 
 
 import random
@@ -21,6 +22,10 @@ class BaseEngine(object):
 
         # Load configs
         config = util.load_config(config_path)
+
+        # Initialize wandb
+        wandb.init(project='Meta Learning for EF Estimation',
+                   config=config)
 
         self.model_config = config['model']
         self.train_config = config['train']
@@ -109,10 +114,8 @@ class Engine(BaseEngine):
                 '[Epoch {}] with lr: {:5f} completed in {:3f} - train loss: {:4f}'\
                 .format(epoch, lr, train_time, self.loss_meter.avg))
 
-            self.scheduler.step()
-            self.loss_meter.reset()
-
-            if epoch % 1 == 0:
+            # Evaluate every 10 epochs
+            if epoch % 10 == 0:
                 eval_metrics = self._evaluate_once(epoch)
                 self.checkpointer.save(epoch, eval_metrics)
                 self.logger.info(
@@ -121,6 +124,13 @@ class Engine(BaseEngine):
                 self.logger.info(
                     '[Epoch {}] - best {}: {:4f}'.format(
                         epoch, self.eval_standard, self.checkpointer.best_eval_metric))
+
+            wandb.log({'train_npml_loss': self.loss_meter.avg,
+                       'val_mae_loss': eval_metrics['mae'],
+                       'val_r2_score': eval_metrics['r2']})
+
+            self.scheduler.step()
+            self.loss_meter.reset()
 
     def _train_one_epoch(self, epoch):
         util.to_train(self.models)
