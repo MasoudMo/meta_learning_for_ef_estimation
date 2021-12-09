@@ -105,7 +105,7 @@ class Engine(BaseEngine):
         # Start training
         for epoch in range(start_epoch, start_epoch + num_epochs):
             train_start = time.time()
-            self._train_one_epoch(epoch)
+            train_metrics = self._train_one_epoch(epoch)
             train_time = time.time() - train_start
 
             lr = self.scheduler.get_lr()[0]
@@ -114,20 +114,22 @@ class Engine(BaseEngine):
                 '[Epoch {}] with lr: {:5f} completed in {:3f} - train loss: {:4f}'\
                 .format(epoch, lr, train_time, self.loss_meter.avg))
 
-            # Evaluate every 10 epochs
-            if epoch % 10 == 0:
+            # Evaluate every Nth epochs
+            if epoch % 1 == 0:
                 eval_metrics = self._evaluate_once(epoch)
                 self.checkpointer.save(epoch, eval_metrics)
                 self.logger.info(
-                    '[Epoch {}] - {}: {:4f}'.format(
+                    '[Epoch {}] - Test {}: {:4f}'.format(
                         epoch, self.eval_standard, eval_metrics[self.eval_standard]))
                 self.logger.info(
-                    '[Epoch {}] - best {}: {:4f}'.format(
+                    '[Epoch {}] - best Test {}: {:4f}'.format(
                         epoch, self.eval_standard, self.checkpointer.best_eval_metric))
 
             wandb.log({'train_npml_loss': self.loss_meter.avg,
                        'val_mae_loss': eval_metrics['mae'],
-                       'val_r2_score': eval_metrics['r2']})
+                       'val_r2_score': eval_metrics['r2'],
+                       'train_mae_loss': train_metrics['mae'],
+                       'train_r2_score': train_metrics['r2']})
 
             self.scheduler.step()
             self.loss_meter.reset()
@@ -157,10 +159,10 @@ class Engine(BaseEngine):
             context_labels = torch.stack(context_labels).unsqueeze(0).permute(0, 2, 1)
             target_inputs = torch.stack(target_inputs)
             target_labels = torch.stack(target_labels).unsqueeze(0).permute(0, 2, 1)
-            output = self.models['np'](
-                context_inputs, context_labels, target_inputs, target_labels)
+            output = self.models['np'](context_inputs, context_labels, target_inputs, target_labels)
 
             # Compute the NPML objective
+            self.criterion.train()
             loss = self.criterion(output, target_label)
             self.loss_meter.update(loss.detach().item())
 
@@ -173,8 +175,28 @@ class Engine(BaseEngine):
             self.logger.info('[Epoch {} Loader {}/{}] NPML train loss: {}'.format(
                 epoch, i, len(dataloaders), loss.detach().item()))
 
+            with torch.no_grad():
+                # Update R2 evaluator
+                if 'r2' in self.evaluators:
+                    self.evaluators['r2'].update(output, target_label)
+
+                # Update MAE evaluator
+                if 'mae' in self.evaluators:
+                    self.evaluators['mae'].update(output, target_label)
+
         torch.cuda.empty_cache()
-        return
+
+        with torch.no_grad():
+            train_metrics = {}
+            for standard in self.evaluators:
+                metric = self.evaluators[standard].compute()
+                train_metrics[standard] = metric
+                self.logger.infov(
+                    '[Epoch {}] - Train - {} score: {:4f}'.format(
+                        epoch, standard, metric))
+                self.evaluators[standard].reset()
+
+        return train_metrics
 
     def _evaluate_once(self, epoch):
         with torch.no_grad():
@@ -208,15 +230,16 @@ class Engine(BaseEngine):
                 output = self.models['np'](
                     context_inputs, context_labels, target_input, target_label)
 
-                # Compute R2 score
+                # Update R2 evaluator
                 if 'r2' in self.evaluators:
                     self.evaluators['r2'].update(output, target_label)
 
-                # Compute MAE score
+                # Update MAE evaluator
                 if 'mae' in self.evaluators:
                     self.evaluators['mae'].update(output, target_label)
 
                 # Compute test loss
+                self.criterion.eval()
                 loss += self.criterion(output, target_label)
                 num_batches += 1
 
@@ -228,7 +251,7 @@ class Engine(BaseEngine):
                 metric = self.evaluators[standard].compute()
                 eval_metrics[standard] = metric
                 self.logger.infov(
-                    '[Epoch {}] - NPML {} {} score: {:4f}'.format(
+                    '[Epoch {}] - Test - NPML {} {} score: {:4f}'.format(
                         epoch, loss.detach().item()/num_batches, standard, metric))
                 self.evaluators[standard].reset()
 
