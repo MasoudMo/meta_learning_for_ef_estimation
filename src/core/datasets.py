@@ -1,6 +1,6 @@
 import re
 import os
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import numpy as np
 from torchvision.transforms import Compose, ToTensor, Normalize, Resize
 import SimpleITK as sitk
@@ -192,13 +192,13 @@ class CamusEfDataset(Dataset):
 
                 if task == 'quality':
                     if match == 'Good':
-                        match = 100
+                        match = 1.0
                     if match == 'Medium':
-                        match = 50
+                        match = 0.5
                     elif match == 'Poor':
-                        match = 25
+                        match = 0.25
                 else:
-                    match = float(label_pattern.findall(label_str)[0][1])
+                    match = float(label_pattern.findall(label_str)[0][1])/100
 
                 # Add sample for task
                 if view == 'all_views':
@@ -332,7 +332,7 @@ class EchoNetEfDataset(Dataset):
         for patient_data_dir, patient_label in zip(data_dirs, labels):
             add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
                                            labels=self.labels,
-                                           label_to_add=patient_label,
+                                           label_to_add=float(patient_label)/100,
                                            path_to_add=patient_data_dir,
                                            task=task)
 
@@ -498,11 +498,11 @@ class LVBiplaneEFDataset(Dataset):
 
                 # Get labels based on task
                 if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
-                    label = np.array(float(matches[1]), dtype=np.float32)
+                    label = np.array(float(matches[1]), dtype=np.float32) / 100
                 elif task == 'esv':
-                    label = np.array(float(matches[3]), dtype=np.float32)
+                    label = np.array(float(matches[3]), dtype=np.float32) / 100
                 else:
-                    label = np.array(float(matches[2]), dtype=np.float32)
+                    label = np.array(float(matches[2]), dtype=np.float32) / 100
 
                 # Find the corresponding cine video path using Accession number
                 match_df = raw_data_summary.loc[raw_data_summary['AccessionNumber'] ==
@@ -655,7 +655,7 @@ class DelEfDataset(Dataset):
         for mat_path in mat_paths:
 
             # Extract EF label
-            label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+            label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32) / 100
 
             # Add sample if it's for the correct task
             add_sample_to_dataset_for_task(patient_dirs=self.patient_data_dirs,
@@ -781,9 +781,9 @@ class NatEfDataset(Dataset):
 
             # Extract EF label
             if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
-                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32) / 100
             else:
-                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32)
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32) / 100
 
             if label != -1 and label != 0:
                 # Add sample if it's for the correct task
@@ -909,9 +909,9 @@ class PocEfDataset(Dataset):
 
             # Extract EF label
             if task in ['all_ef', 'high_risk_ef', 'medium_ef_risk', 'slight_ef_risk', 'normal_ef']:
-                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32)
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['vEF'], dtype=np.float32) / 100
             else:
-                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32)
+                label = np.array(loadmat(mat_path, simplify_cells=True)['labels']['Quality'], dtype=np.float32) / 100
 
             if not isnan(label) and label != 0 and label != -1:
                 # Add sample if it's for the correct task
@@ -975,3 +975,12 @@ class PocEfDataset(Dataset):
 
         return self.num_samples
 
+
+# if __name__ == '__main__':
+#
+#     dataset = DelEfDataset(datasets_root_path='D:\Workspace\RCL\datasets',
+#                            image_shape=128,
+#                            num_frames=32)
+#
+#     for i in range(len(dataset)):
+#         print(dataset[i])

@@ -2,12 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models.video import r2plus1d_18
-from math import floor
 
 
 class Resnet2Plus1D(nn.Module):
     def __init__(self,
-                 input_dim=128,
                  output_dim=128,
                  fc_dropout_p=0):
 
@@ -42,7 +40,6 @@ class CustomCNN3D(nn.Module):
     Custom 3D CNN used to generate vectors for input images
     """
     def __init__(self,
-                 input_dim=128,
                  n_conv_layers=2,
                  out_channels=None,
                  kernel_sizes=None,

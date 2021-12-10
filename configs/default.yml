@@ -2,7 +2,6 @@ model: &model
   checkpoint_path: ''
   x_encoder:
     name: customcnn3d
-    input_dim: 128
     n_conv_layers: 3
     out_channels: [10, 60, 128]
     kernel_sizes: 3
