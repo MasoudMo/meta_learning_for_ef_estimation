@@ -3,6 +3,7 @@ from functools import partial
 import npf
 from npf.architectures import MLP, merge_flat_input
 from src.core import models
+import torch.nn as nn
 
 ENCODERS = {
     'resnet2plus1d': models.Resnet2Plus1D,
@@ -37,7 +38,10 @@ def build(model_config, logger):
     np_model_name = np_config.pop('name', 'lnp')
 
     decoder = merge_flat_input(
-        partial(MLP, n_hidden_layers=decoder_num_layers, hidden_size=decoder_hidden_dim), is_sum_merge=True)
+        partial(MLP,
+                n_hidden_layers=decoder_num_layers,
+                hidden_size=decoder_hidden_dim,
+                activation=nn.Sigmoid()), is_sum_merge=True)
     model = NP_MODLES[np_model_name](
         XYEncoder=xy_encoder, Decoder=decoder, **np_config)
 
