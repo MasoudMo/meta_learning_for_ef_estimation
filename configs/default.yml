@@ -53,10 +53,36 @@ data: &data
   num_workers: 8
   max_samples: 10
   context_ratio_range: [0.2, 0.8]
-  tasks_to_exclude: ['nat_lvef_medium_ef_risk_ap4',
-                     'nat_lvef_medium_ef_risk_ap2',
+  tasks_to_exclude: ['camus_medium_ef_risk_ap2',
+                     'camus_slight_ef_risk_ap2',
+                     'camus_normal_ef_ap2',
+                     'camus_medium_ef_risk_ap4',
+                     'camus_slight_ef_risk_ap4',
+                     'camus_normal_ef_ap4',
+                     'biplane_lvef_medium_ef_risk_ap2',
+                     'biplane_lvef_slight_ef_risk_ap2',
+                     'biplane_lvef_normal_ef_ap2',
+                     'biplane_lvef_medium_ef_risk_ap4',
+                     'biplane_lvef_slight_ef_risk_ap4',
+                     'biplane_lvef_normal_ef_ap4',
+                     'del_lvef_medium_ef_risk_ap2',
+                     'del_lvef_slight_ef_risk_ap2',
+                     'del_lvef_normal_ef_ap2',
                      'del_lvef_medium_ef_risk_ap4',
-                     'del_lvef_medium_ef_risk_ap2']
+                     'del_lvef_slight_ef_risk_ap4',
+                     'del_lvef_normal_ef_ap4',
+                     'nat_lvef_medium_ef_risk_ap2',
+                     'nat_lvef_slight_ef_risk_ap2',
+                     'nat_lvef_normal_ef_ap2',
+                     'nat_lvef_medium_ef_risk_ap4',
+                     'nat_lvef_slight_ef_risk_ap4',
+                     'nat_lvef_normal_ef_ap4',
+                     'poc_lvef_medium_ef_risk_ap2',
+                     'poc_lvef_slight_ef_risk_ap2',
+                     'poc_lvef_normal_ef_ap2',
+                     'poc_lvef_medium_ef_risk_ap4',
+                     'poc_lvef_slight_ef_risk_ap4',
+                     'poc_lvef_normal_ef_ap4']
 
   dataset1:
     name: 'camus'

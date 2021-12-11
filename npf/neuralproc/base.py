@@ -211,10 +211,10 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         """
         self._validate_inputs(X_cntxt, Y_cntxt, X_trgt, Y_trgt)
 
-        # size = [batch_size, *n_cntxt, x_transf_dim]
-        X_cntxt = self.x_encoder(X_cntxt)
-        # size = [batch_size, *n_trgt, x_transf_dim]
-        X_trgt = self.x_encoder(X_trgt)
+        # # size = [batch_size, *n_cntxt, x_transf_dim]
+        # X_cntxt = self.x_encoder(X_cntxt)
+        # # size = [batch_size, *n_trgt, x_transf_dim]
+        # X_trgt = self.x_encoder(X_trgt)
 
         # {R^u}_u
         # size = [batch_size, *n_rep, r_dim]
