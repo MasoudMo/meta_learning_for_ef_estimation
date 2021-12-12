@@ -73,11 +73,9 @@ def to_device(dict, device):
 # Other
 # =====
 
-def to_train(models):
-    for key in models.keys():
-        models[key].train()
+def to_train(model):
+        model.train()
 
-def to_eval(models):
-    for key in models.keys():
-        models[key].eval()
+def to_eval(model):
+    model.eval()
 

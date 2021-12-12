@@ -107,6 +107,7 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         y_dim,
         encoded_path,
         r_dim=128,
+        video_latent_var=False,
         x_transf_dim=-1,
         is_heteroskedastic=True,
         XEncoder=None,
@@ -120,6 +121,7 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.r_dim = r_dim
+        self.video_latent_var = video_latent_var
         self.encoded_path = encoded_path
         self.is_heteroskedastic = is_heteroskedastic
 
@@ -211,10 +213,21 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         """
         self._validate_inputs(X_cntxt, Y_cntxt, X_trgt, Y_trgt)
 
-        # # size = [batch_size, *n_cntxt, x_transf_dim]
-        # X_cntxt = self.x_encoder(X_cntxt)
-        # # size = [batch_size, *n_trgt, x_transf_dim]
-        # X_trgt = self.x_encoder(X_trgt)
+        # Change shape of targets
+        Y_cntxt = Y_cntxt.unsqueeze(0).unsqueeze(2)
+        Y_trgt = Y_trgt.unsqueeze(0).unsqueeze(2)
+
+        # size = [batch_size, *n_cntxt, x_transf_dim]
+        X_cntxt = self.x_encoder(X_cntxt).unsqueeze(0)
+        # size = [batch_size, *n_trgt, x_transf_dim]
+        X_trgt = self.x_encoder(X_trgt).unsqueeze(0)
+
+        # Map videos into their latent var
+        if self.video_latent_var:
+            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), X_trgt, Y_trgt)
+            X_cntxt = X_cntxt.squeeze(2)
+            X_trgt = torch.mean(X_trgt.squeeze(0), dim=1, keepdim=True).permute(1, 0, 2)
+            X_trgt = X_trgt.expand(X_cntxt.size(0), -1, -1)
 
         # {R^u}_u
         # size = [batch_size, *n_rep, r_dim]

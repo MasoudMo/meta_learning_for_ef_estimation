@@ -7,7 +7,8 @@ import torch.nn as nn
 
 ENCODERS = {
     'resnet2plus1d': models.Resnet2Plus1D,
-    'customcnn3d': models.CustomCNN3D
+    'customcnn3d': models.CustomCNN3D,
+    'customcnn3dspatial': models.CustomCNN3DSpatial
 }
 
 
@@ -20,7 +21,7 @@ def build(model_config, logger):
     # Build a x_encoder
     x_encoder_config = deepcopy(model_config['x_encoder'])
     x_encoder_name = x_encoder_config.pop('name')
-    x_encoder = ENCODERS[x_encoder_name](**x_encoder_config)
+    x_encoder = partial(ENCODERS[x_encoder_name], **x_encoder_config)
 
     # Build a xy_encoder
     xy_encoder_config = model_config['xy_encoder']
@@ -43,16 +44,11 @@ def build(model_config, logger):
                 hidden_size=decoder_hidden_dim,
                 activation=nn.Sigmoid()), is_sum_merge=True)
     model = NP_MODLES[np_model_name](
-        XYEncoder=xy_encoder, Decoder=decoder, **np_config)
-
-    models = {
-        'x_encoder': x_encoder,
-        'np': model
-    }
+        XYEncoder=xy_encoder, Decoder=decoder, XEncoder=x_encoder, **np_config)
 
     logger.infov(
         'model is built - x_encoder: {}, xy_encoder: MLP, decoder: MLP, NP: {}'.format(
             x_encoder_name, np_model_name))
 
-    return models
+    return model
 

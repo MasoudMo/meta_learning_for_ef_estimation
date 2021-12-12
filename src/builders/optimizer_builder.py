@@ -7,11 +7,11 @@ OPTIMIZERS = {
     'adam': optim.Adam,
 }
 
-def build(optim_config, models, logger):
+def build(optim_config, model, logger):
     optim_params = deepcopy(optim_config)
     optimizer_name = optim_params.pop('name')
     optim_params['params'] =\
-        list(models['np'].parameters()) + list(models['x_encoder'].parameters())
+        list(model.parameters())
 
     if optimizer_name in OPTIMIZERS:
         optimizer = OPTIMIZERS[optimizer_name](**optim_params)

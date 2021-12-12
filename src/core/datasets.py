@@ -976,11 +976,13 @@ class PocEfDataset(Dataset):
         return self.num_samples
 
 
-# if __name__ == '__main__':
-#
-#     dataset = DelEfDataset(datasets_root_path='D:\Workspace\RCL\datasets',
-#                            image_shape=128,
-#                            num_frames=32)
-#
-#     for i in range(len(dataset)):
-#         print(dataset[i])
+if __name__ == '__main__':
+
+    dataset = NatEfDataset(datasets_root_path='D:\Workspace\RCL\datasets',
+                                 image_shape=128,
+                                 num_frames=32,
+                                 task='slight_ef_risk',
+                                 view='ap2')
+
+    for i in range(len(dataset)):
+        print(dataset[i][1])

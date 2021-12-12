@@ -60,24 +60,24 @@ def build_train(data_config, tasks, logger):
     return dataloaders
 
 def build_test(data_config, tasks, logger):
-    max_samples = data_config['max_samples']
     task = tasks['test']
     logger.info('Test task is loaded')
 
     # Randomly split the task into context and target sets
-    context_size = floor(0.2 * len(task))
-    target_size = len(task) - context_size
-
-    context_dataset, target_dataset = random_split(task, [context_size, target_size])
+    context_splits = [10]*167
+    target_splits = [50]*166
+    target_splits = target_splits + [60]
+    splits = context_splits + target_splits
+    datasets = random_split(task, splits)
+    context_datasets = datasets[:len(context_splits)]
+    target_datasets = datasets[len(context_splits):]
 
     # Create data loaders
-    context_dataloader = DataLoader(
-        context_dataset, batch_size=1, collate_fn=custom_collate_fn)
-    target_dataloader = DataLoader(
-        target_dataset, batch_size=max_samples, collate_fn=custom_collate_fn)
+    dataloaders = []
+    for context_dataset, target_dataset in zip(context_datasets, target_datasets):
+        context_dataloader = DataLoader(context_dataset, batch_size=10, collate_fn=custom_collate_fn)
+        target_dataloader = DataLoader(target_dataset, batch_size=10, collate_fn=custom_collate_fn)
+        dataloaders.append(
+            {'context': context_dataloader, 'target': target_dataloader})
 
-    dataloaders = {
-        'context': context_dataloader,
-        'target': target_dataloader
-    }
     return dataloaders

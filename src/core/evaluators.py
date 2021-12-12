@@ -29,8 +29,11 @@ class R2Evaluator(Evaluator):
         self.y_pred = np.array([])
         self.y_true = np.array([])
 
-    def update(self, y_pred, y_true):
-        y_pred = y_pred[0].mean.squeeze().mean(dim=0).detach().cpu().numpy()
+    def update(self, y_pred, y_true, video_latent=False):
+        if video_latent:
+            y_pred = y_pred[0].mean.squeeze().mean(dim=0).mean(dim=0).detach().cpu().numpy()
+        else:
+            y_pred = y_pred[0].mean.squeeze().mean(dim=0).detach().cpu().numpy()
         self.y_pred = np.concatenate((self.y_pred, y_pred), axis=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze().detach().cpu().numpy()
@@ -47,8 +50,11 @@ class MaeEvaluator(Evaluator):
         self.y_pred = torch.tensor([], device=self.device)
         self.y_true = torch.tensor([], device=self.device)
 
-    def update(self, y_pred, y_true):
-        y_pred = y_pred[0].mean.squeeze().mean(dim=0)
+    def update(self, y_pred, y_true, video_latent=False):
+        if video_latent:
+            y_pred = y_pred[0].mean.squeeze().mean(dim=0).mean(dim=0)
+        else:
+            y_pred = y_pred[0].mean.squeeze().mean(dim=0)
         self.y_pred = torch.cat((self.y_pred, y_pred), dim=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze()

@@ -6,13 +6,12 @@ model: &model
     out_channels: [10, 60, 128]
     kernel_sizes: 3
     pool_sizes: 2
-    output_dim: 128
     cnn_dropout_p: 0
     fc_dropout_p: 0
 
   xy_encoder:
     num_layers: 2
-    hidden_dim: 256
+    hidden_dim: 128
 
   decoder:
     name: mlp
@@ -24,10 +23,10 @@ model: &model
     x_dim: 128
     y_dim: 1
     is_q_zCct: False
-    n_z_samples_train: 1
+    n_z_samples_train: 20
     n_z_samples_test: 32
+    video_latent_var: False
 #    encoded_path: 'latent' Only use for LNP
-
 
 train: &train
   num_epochs: 100
