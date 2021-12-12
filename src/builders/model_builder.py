@@ -14,7 +14,8 @@ ENCODERS = {
 
 NP_MODLES = {
     'lnp': npf.LNP,
-    'attnlnp': npf.AttnLNP
+    'attnlnp': npf.AttnLNP,
+    'attncnp': npf.AttnCNP
 }
 
 def build(model_config, logger):
