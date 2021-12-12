@@ -168,11 +168,11 @@ class Engine(BaseEngine):
                 with torch.no_grad():
                     # Update R2 evaluator
                     if 'r2' in self.evaluators:
-                        self.evaluators['r2'].update(output, target_label)
+                        self.evaluators['r2'].update(output, target_label, self.model.video_latent_var)
 
                     # Update MAE evaluator
                     if 'mae' in self.evaluators:
-                        self.evaluators['mae'].update(output, target_label)
+                        self.evaluators['mae'].update(output, target_label, self.model.video_latent_var)
 
         torch.cuda.empty_cache()
 
