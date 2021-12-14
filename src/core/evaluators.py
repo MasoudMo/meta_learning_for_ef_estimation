@@ -25,7 +25,7 @@ class Evaluator(object):
 class R2Evaluator(Evaluator):
 
     def reset(self):
-        self.r2_score = 0.
+        self.r2_score = -np.inf
         self.y_pred = np.array([])
         self.y_true = np.array([])
 
