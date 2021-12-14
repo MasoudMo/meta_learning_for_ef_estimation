@@ -223,8 +223,13 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         X_trgt = self.x_encoder(X_trgt).unsqueeze(0)
 
         # Map videos into their latent var
-        if self.video_latent_var:
-            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), X_trgt, Y_trgt)
+        if self.video_latent_var and self.is_q_zCct:
+            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), None, None)
+            X_cntxt = X_cntxt.squeeze(2)
+            X_trgt, _, _ = self.latent_path(None, X_trgt.squeeze(0), None, None)
+            X_trgt = X_trgt.squeeze(2)
+        elif self.video_latent_var:
+            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), None, None)
             X_cntxt = X_cntxt.squeeze(2)
             X_trgt = torch.mean(X_trgt.squeeze(0), dim=1, keepdim=True).permute(1, 0, 2)
             X_trgt = X_trgt.expand(X_cntxt.size(0), -1, -1)
