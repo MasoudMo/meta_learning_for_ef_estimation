@@ -15,6 +15,7 @@ while [[ $# -gt 1 ]]
       ;;
       -e|--eval_only)
       EVAL_ONLY="$2"
+      ;;
       *) # unknown option
       ;;
     esac
