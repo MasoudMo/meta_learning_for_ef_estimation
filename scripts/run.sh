@@ -1,5 +1,6 @@
 #!/bin/sh
 
+EVAL_ONLY=""
 while [[ $# -gt 1 ]]
   do
     key="$1"
@@ -14,7 +15,7 @@ while [[ $# -gt 1 ]]
       shift # past argument
       ;;
       -e|--eval_only)
-      EVAL_ONLY="$2"
+      EVAL_ONLY="--eval_only"
       ;;
       *) # unknown option
       ;;
@@ -25,4 +26,4 @@ while [[ $# -gt 1 ]]
 python run.py \
     --config_path=${CONFIG_PATH} \
     --save_dir=${SAVE_DIR} \
-    --eval_only=${EVAL_ONLY}
+    ${EVAL_ONLY}
