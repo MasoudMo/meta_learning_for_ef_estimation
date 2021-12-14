@@ -10,7 +10,7 @@ if __name__== '__main__':
                         help="Path to a config")
     parser.add_argument('--save_dir', default='',
                         help='Path to dir to save checkpoints and logs')
-    parser.add_argument('--eval_only', action='store_true', default=False,
+    parser.add_argument('--eval_only', action='store_true',
                         help='run eval only using the given checkpoint path')
     args = parser.parse_args()
 
