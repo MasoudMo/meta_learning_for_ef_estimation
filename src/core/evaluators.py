@@ -34,6 +34,7 @@ class R2Evaluator(Evaluator):
             y_pred = y_pred[0].mean.squeeze().mean(dim=0).mean(dim=0).detach().cpu().numpy()
         else:
             y_pred = y_pred[0].mean.squeeze().mean(dim=0).detach().cpu().numpy()
+        # y_pred = y_pred[0].mean.squeeze().detach().cpu().numpy()
         self.y_pred = np.concatenate((self.y_pred, y_pred), axis=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze().detach().cpu().numpy()
@@ -55,14 +56,16 @@ class MaeEvaluator(Evaluator):
             y_pred = y_pred[0].mean.squeeze().mean(dim=0).mean(dim=0)
         else:
             y_pred = y_pred[0].mean.squeeze().mean(dim=0)
+        # y_pred = y_pred[0].mean.squeeze()
         self.y_pred = torch.cat((self.y_pred, y_pred), dim=0) if self.y_pred.size else y_pred
 
         y_true = y_true.squeeze()
         self.y_true = torch.cat((self.y_true, y_true), dim=0) if self.y_true.size else y_true
 
     def compute(self):
-        self.mae_scoe = torch.nn.functional.l1_loss(self.y_pred, self.y_true)
-        return self.mae_scoe.item()
+        self.mae_score = torch.nn.functional.l1_loss(self.y_pred, self.y_true)
+        return self.mae_score.item()
+
 
 
 

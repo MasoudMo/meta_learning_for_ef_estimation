@@ -143,6 +143,7 @@ class BaseAttender(abc.ABC, nn.Module):
         logits = self.score(keys, queries, **kwargs)
 
         attn = self.logits_to_attn(logits)
+        self.attn = attn
 
         attn = self.dropout(attn)
 

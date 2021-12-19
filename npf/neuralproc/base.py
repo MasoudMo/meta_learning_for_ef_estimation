@@ -223,16 +223,13 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
         X_trgt = self.x_encoder(X_trgt).unsqueeze(0)
 
         # Map videos into their latent var
-        if self.video_latent_var and self.is_q_zCct:
-            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), None, None)
-            X_cntxt = X_cntxt.squeeze(2)
-            X_trgt, _, _ = self.latent_path(None, X_trgt.squeeze(0), None, None)
-            X_trgt = X_trgt.squeeze(2)
-        elif self.video_latent_var:
-            X_cntxt, _, _ = self.latent_path(None, X_cntxt.squeeze(0), None, None)
-            X_cntxt = X_cntxt.squeeze(2)
-            X_trgt = torch.mean(X_trgt.squeeze(0), dim=1, keepdim=True).permute(1, 0, 2)
-            X_trgt = X_trgt.expand(X_cntxt.size(0), -1, -1)
+        q_zCc_vid = None
+        q_zCct_vid = None
+        if self.video_latent_var:
+            R_vid = self.encode_globally_vid(X_cntxt, Y_cntxt).squeeze(0)
+            X_cntxt, X_trgt, q_zCc_vid, q_zCct_vid = self.latent_path_vid(X_cntxt, R_vid, X_trgt, Y_trgt)
+            X_cntxt = X_cntxt.squeeze(1)
+            X_trgt = X_trgt.squeeze(1)
 
         # {R^u}_u
         # size = [batch_size, *n_rep, r_dim]
@@ -249,12 +246,13 @@ class NeuralProcessFamily(nn.Module, abc.ABC):
 
         # size = [n_z_samples, batch_size, *n_trgt, r_dim]
         R_trgt = self.trgt_dependent_representation(X_cntxt, z_samples, R, X_trgt)
+        a = R_trgt.detach().cpu().numpy()
 
         # p(y|cntxt,trgt)
         # batch shape=[n_z_samples, batch_size, *n_trgt] ; event shape=[y_dim]
-        p_yCc = self.decode(X_trgt, R_trgt)
+        p_yCc = self.decode(X_trgt.expand(R_trgt.size(0), -1, -1, -1), R_trgt)
 
-        return p_yCc, z_samples, q_zCc, q_zCct
+        return p_yCc, z_samples, q_zCc, q_zCct, q_zCc_vid, q_zCct_vid
 
     def _validate_inputs(self, X_cntxt, Y_cntxt, X_trgt, Y_trgt):
         """Validates the inputs by checking if features are rescaled to [-1,1] during training."""
@@ -531,6 +529,25 @@ class LatentNeuralProcessFamily(NeuralProcessFamily):
 
         return z_samples, q_zCc, q_zCct
 
+    def latent_path_vid(self, X_cntxt, R, X_trgt, Y_trgt):
+
+        # q(z|c)
+        # batch shape = [batch_size, *n_lat] ; event shape = [z_dim]
+        q_zCc = self.infer_latent_dist_vid(X_cntxt, R)
+        context_sampling_dist = q_zCc
+
+        # during training when we know Y_trgt, we can take an expectation over q(z|cntxt,trgt)
+        # instead of q(z|cntxt). note that actually does q(z|trgt) because trgt has cntxt
+        R_from_trgt = self.encode_globally_vid(X_trgt, Y_trgt)
+        q_zCct = self.infer_latent_dist_vid(X_trgt, R_from_trgt)
+        target_sampling_dist = q_zCct
+
+        # size = [n_z_samples, batch_size, *n_lat, z_dim]
+        context_samples = context_sampling_dist.rsample([self.n_z_samples])
+        target_samples = target_sampling_dist.rsample([self.n_z_samples])
+
+        return context_samples, target_samples, q_zCc, q_zCct
+
     def infer_latent_dist(self, X, R):
         """Infer latent distribution given desired features and global representation.
 
@@ -558,6 +575,39 @@ class LatentNeuralProcessFamily(NeuralProcessFamily):
 
         q_z_loc = self.q_z_loc_transformer(q_z_loc)
         q_z_scale = self.q_z_scale_transformer(q_z_scale)
+
+        # batch shape = [batch_size, *n_lat] ; event shape = [z_dim]
+        q_zCc = self.LatentDistribution(q_z_loc, q_z_scale)
+
+        return q_zCc
+
+    def infer_latent_dist_vid(self, X, R):
+        """Infer latent distribution given desired features and global representation.
+
+        Parameters
+        ----------
+        X : torch.Tensor, size=[batch_size, *n_i, x_transf_dim]
+            Set of all features {x^i}_i. E.g. context or target.
+
+        R : torch.Tensor, size=[batch_size, *n_rep, r_dim]
+            Global representation values {r^u}_u.
+
+        Return
+        ------
+        q_zCc: torch.distributions.Distribution, batch shape = [batch_size, *n_lat] ; event shape = [z_dim]
+            Inferred latent distribution.
+        """
+
+        # size = [batch_size, *n_lat, z_dim]
+        R_lat_inp = self.rep_to_lat_input(R)
+
+        # size = [batch_size, *n_lat, z_dim*2]
+        q_z_suffstat = self.latent_encoder(R_lat_inp)
+
+        q_z_loc, q_z_scale = q_z_suffstat.split(self.z_dim, dim=-1)
+
+        q_z_loc = self.q_z_loc_transformer(q_z_loc.permute(1, 0, 2))
+        q_z_scale = self.q_z_scale_transformer(q_z_scale.permute(1, 0, 2))
 
         # batch shape = [batch_size, *n_lat] ; event shape = [z_dim]
         q_zCc = self.LatentDistribution(q_z_loc, q_z_scale)

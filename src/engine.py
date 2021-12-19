@@ -5,7 +5,8 @@ from src.builders import model_builder, task_builder, dataloader_builder,\
     optimizer_builder, criterion_builder, checkpointer_builder, evaluator_builder,\
     meter_builder, scheduler_builder
 import wandb
-
+import matplotlib.pyplot as plt
+import numpy as np
 
 import random
 
@@ -50,8 +51,9 @@ class BaseEngine(object):
         pass
 
     def evaluate(self):
-        pass
-
+        self._build(mode='val')
+        metrics = self._evaluate_attention(0)
+        print('hey')
 
 
 class Engine(BaseEngine):
@@ -125,11 +127,14 @@ class Engine(BaseEngine):
                     '[Epoch {}] - best Test {}: {:4f}'.format(
                         epoch, self.eval_standard, self.checkpointer.best_eval_metric))
 
+
+                wandb.log({'val_mae_loss': eval_metrics['mae'],
+                           'val_r2_score': eval_metrics['r2']}, step=epoch)
+
+
             wandb.log({'train_npml_loss': self.loss_meter.avg,
-                       'val_mae_loss': eval_metrics['mae'],
-                       'val_r2_score': eval_metrics['r2'],
                        'train_mae_loss': train_metrics['mae'],
-                       'train_r2_score': train_metrics['r2']})
+                       'train_r2_score': train_metrics['r2']}, step=epoch)
 
             self.scheduler.step()
             self.loss_meter.reset()
@@ -153,7 +158,7 @@ class Engine(BaseEngine):
                 output = self.model(context_input, context_label, target_input, target_label)
 
                 # Compute the NPML objective
-                loss = self.criterion(output, target_label)
+                loss = self.criterion(output, target_label, self.model.video_latent_var)
                 self.loss_meter.update(loss.detach().item())
 
                 # Back propagate
@@ -220,7 +225,7 @@ class Engine(BaseEngine):
                         self.evaluators['mae'].update(output, target_label,  self.model.video_latent_var)
 
                     # Compute test loss
-                    loss.append(self.criterion(output, target_label).detach().item())
+                    loss.append(self.criterion(output, target_label, self.model.video_latent_var).detach().item())
 
             self.logger.info(
                 '[Epoch {}] - NPML test loss: {:4f}'.format(epoch, sum(loss)/len(loss)))
@@ -236,3 +241,39 @@ class Engine(BaseEngine):
 
             return eval_metrics
 
+
+    def _evaluate_attention(self, epoch):
+        with torch.no_grad():
+            util.to_eval(self.model)
+            self.criterion.eval()
+            dataloaders = dataloader_builder.build_test(
+                self.data_config, self.tasks, self.logger)
+
+            loss = []
+            for i, dataloader in enumerate(dataloaders):
+
+                context_dataloader, target_dataloader = dataloader['context'], dataloader['target']
+
+                for (context_input, context_label) in context_dataloader:
+                    context_input, context_label =\
+                            context_input.to(self.device), context_label.to(self.device)
+
+                # Now go through batches of test set and compute the losses
+                for idx, (target_input, target_label) in enumerate(target_dataloader):
+                    target_input, target_label =\
+                            target_input.to(self.device), target_label.to(self.device)
+
+                    output = self.model(context_input, context_label, target_input, target_label)
+                    variance = output[0].variance.detach().cpu().numpy()
+
+                    attention_scores = self.model.attender.attn.detach().cpu().numpy()
+
+                    # best_context_idx = np.argmax(attention_scores[0, 0, :])
+                    # worst_context_idx = np.argmin(attention_scores[0, 0, :])
+                    # if idx % 10 == 0:
+                    #     for i in range(50):
+                    #         plt.imsave('./qual/' + str(idx) + '_best_' + str(i) + '.png', context_input.detach().cpu().numpy()[best_context_idx, i, 0, :, :])
+                    #         plt.imsave('./qual/' + str(idx) + '_worst_' + str(i) + '.png', context_input.detach().cpu().numpy()[worst_context_idx, i, 0, :, :])
+                    #         plt.imsave('./qual/' + str(idx) + '_target_' + str(i) + '.png', context_input.detach().cpu().numpy()[0, i, 0, :, :])
+
+            return None

@@ -42,8 +42,7 @@ def build(model_config, logger):
     decoder = merge_flat_input(
         partial(MLP,
                 n_hidden_layers=decoder_num_layers,
-                hidden_size=decoder_hidden_dim,
-                activation=nn.Sigmoid()), is_sum_merge=True)
+                hidden_size=decoder_hidden_dim), is_sum_merge=True)
     model = NP_MODLES[np_model_name](
         XYEncoder=xy_encoder, Decoder=decoder, XEncoder=x_encoder, **np_config)
 

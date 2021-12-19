@@ -42,7 +42,7 @@ class BaseLossNPF(nn.Module, abc.ABC):
         self.reduction = reduction
         self.is_force_mle_eval = is_force_mle_eval
 
-    def forward(self, pred_outputs, Y_trgt):
+    def forward(self, pred_outputs, Y_trgt, vl):
         """Compute the Neural Process Loss.
 
         Parameters
@@ -58,15 +58,15 @@ class BaseLossNPF(nn.Module, abc.ABC):
         loss : torch.Tensor
             size=[batch_size] if `reduction=None` else [1].
         """
-        p_yCc, z_samples, q_zCc, q_zCct = pred_outputs
+        p_yCc, z_samples, q_zCc, q_zCct, q_zCc_vid, q_zCct_vid = pred_outputs
 
         if self.training:
-            loss = self.get_loss(p_yCc, z_samples, q_zCc, q_zCct, Y_trgt)
+            loss = self.get_loss(p_yCc, z_samples, q_zCc, q_zCct, q_zCc_vid, q_zCct_vid, Y_trgt, vl)
         else:
             # always uses NPML for evaluation
             if self.is_force_mle_eval:
                 q_zCct = None
-            loss = NLLLossLNPF.get_loss(self, p_yCc, z_samples, q_zCc, q_zCct, Y_trgt)
+            loss = NLLLossLNPF.get_loss(self, p_yCc, z_samples, q_zCc, q_zCct, q_zCc_vid, q_zCct_vid, Y_trgt, vl, Y_trgt)
 
         if self.reduction is None:
             # size = [batch_size]
@@ -166,7 +166,7 @@ class NLLLossLNPF(BaseLossNPF):
     [?]
     """
 
-    def get_loss(self, p_yCc, z_samples, q_zCc, q_zCct, Y_trgt):
+    def get_loss(self, p_yCc, z_samples, q_zCc, q_zCct, q_zCc_vid, q_zCct_vid, Y_trgt, vl=False):
 
         n_z_samples, batch_size, *n_trgt = p_yCc.batch_shape
 
@@ -190,6 +190,11 @@ class NLLLossLNPF(BaseLossNPF):
             # importance sampling : multiply \prod_t p(y^t|z)) by q(z|y_cntxt) / q(z|y_cntxt, y_trgt)
             # i.e. add log q(z|y_cntxt) - log q(z|y_cntxt, y_trgt)
             sum_log_w_k = sum_log_p_yCz + sum_log_q_zCc - sum_log_q_zCct
+
+            if vl:
+                sum_log_w_k += sum_log_prob(q_zCc_vid, z_samples)
+                sum_log_w_k -= sum_log_prob(q_zCct_vid, z_samples)
+
         else:
             sum_log_w_k = sum_log_p_yCz
 

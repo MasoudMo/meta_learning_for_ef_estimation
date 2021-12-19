@@ -75,8 +75,8 @@ def build_test(data_config, tasks, logger):
     # Create data loaders
     dataloaders = []
     for context_dataset, target_dataset in zip(context_datasets, target_datasets):
-        context_dataloader = DataLoader(context_dataset, batch_size=10, collate_fn=custom_collate_fn)
-        target_dataloader = DataLoader(target_dataset, batch_size=10, collate_fn=custom_collate_fn)
+        context_dataloader = DataLoader(context_dataset, batch_size=10, collate_fn=custom_collate_fn, shuffle=True)
+        target_dataloader = DataLoader(target_dataset, batch_size=10, collate_fn=custom_collate_fn, shuffle=True)
         dataloaders.append(
             {'context': context_dataloader, 'target': target_dataloader})
 

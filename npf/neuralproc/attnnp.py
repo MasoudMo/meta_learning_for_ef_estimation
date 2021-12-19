@@ -115,6 +115,19 @@ class AttnCNP(NeuralProcessFamily):
 
         return R_cntxt
 
+    def encode_globally_vid(self, X_cntxt, Y_cntxt):
+        batch_size, n_cntxt, num_frames, _ = X_cntxt.shape
+
+        if n_cntxt == 0:
+            # arbitrarily setting each target representation to zero when no context
+            R_cntxt = torch.zeros(batch_size, 0, self.r_dim, device=X_cntxt.device)
+        else:
+            # One representation per context point
+            # size = [batch_size, n_cntxt, r_dim]
+            R_cntxt = self.xy_encoder(X_cntxt, Y_cntxt.unsqueeze(2).expand(-1, -1, num_frames, -1))
+
+        return R_cntxt.squeeze(0)
+
     def trgt_dependent_representation(self, X_cntxt, _, R, X_trgt):
         batch_size, n_cntxt, _ = X_cntxt.shape
 
